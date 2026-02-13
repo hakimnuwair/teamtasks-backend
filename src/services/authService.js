@@ -1,4 +1,8 @@
 import User from "../models/User.js";
+import {
+  generateAccessToken,
+  generateRefreshToken,
+} from "../utils/generateToken.js";
 
 export const saveUser = async (user) => {
   try {
@@ -20,18 +24,50 @@ export const getCurrentUserDetails = async (user) => {
   }
 };
 
-export const loginUser = async (user) => {
-  try {
-    const savedUser = await User.findOne({ email: user.email });
+export const loginUser = async ({ email, password }) => {
+  // 1️⃣ Find user
+  const user = await User.findOne({ email });
 
-    if (!savedUser) return false;
-
-    if (savedUser.password == user.password) {
-      return savedUser;
-    }
-
-    return false;
-  } catch (error) {
-    throw error;
+  if (!user) {
+    return {
+      success: false,
+      message: "Invalid email or password",
+    };
   }
+
+  // 2️⃣ Check account status
+  if (user.status !== "ACTIVE") {
+    return {
+      success: false,
+      message: "Account is not active",
+    };
+  }
+
+  // 3️⃣ Compare password
+  const isMatch = await user.comparePassword(password);
+
+  if (!isMatch) {
+    return {
+      success: false,
+      message: "Invalid email or password",
+    };
+  }
+
+  // 4️⃣ Generate tokens
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
+
+  return {
+    success: true,
+    data: {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    },
+  };
 };
