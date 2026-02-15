@@ -7,8 +7,8 @@ import userRoutes from "./routes/userRoutes.js";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import cors from "cors";
-import mongoSanitize from "express-mongo-sanitize";
-import xss from "xss-clean";
+// import mongoSanitize from "express-mongo-sanitize";
+// import xss from "xss-clean";
 import cookieParser from "cookie-parser";
 
 const app = express();
@@ -17,24 +17,24 @@ const versionPrefix = process.env.versionPrefix;
 
 // middleware
 // ----- Security Middleware -----
-// app.use(helmet());
-// app.use(cookieParser());
+app.use(helmet());
+app.use(cookieParser());
 
-// app.use(
-//   cors({
-//     origin: "http://localhost:3000",
-//     credentials: true,
-//   }),
-// );
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  }),
+);
 
 // app.use(mongoSanitize());
 // app.use(xss());
 
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000,
-//   max: 100,
-// });
-// app.use(limiter);
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+});
+app.use(limiter);
 
 // --------------------------------
 

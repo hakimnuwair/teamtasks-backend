@@ -15,7 +15,9 @@ export const saveUser = async (user) => {
 
 export const getCurrentUserDetails = async (user) => {
   try {
-    const savedUser = await User.findOne({ email: user.email });
+    const savedUser = await User.findOne({ email: user.email }).select(
+      "-password",
+    );
     if (!savedUser) return false;
 
     return savedUser;
