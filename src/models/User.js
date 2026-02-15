@@ -21,6 +21,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       minLength: 8,
+      select: false,
     },
 
     groups: [
@@ -29,6 +30,12 @@ const userSchema = new mongoose.Schema(
         ref: "Group",
       },
     ],
+
+    role: {
+      type: String,
+      enum: ["USER", "ADMIN"],
+      default: "USER",
+    },
 
     status: {
       type: String,

@@ -6,7 +6,12 @@ import {
 
 export const saveUser = async (user) => {
   try {
-    const newUser = new User(user);
+    const newUser = await User.create({
+      name: user.name,
+      email: user.email,
+      password: user.password,
+      role: "USER",
+    });
     return newUser.save();
   } catch (error) {
     throw error;
@@ -28,7 +33,7 @@ export const getCurrentUserDetails = async (user) => {
 
 export const loginUser = async ({ email, password }) => {
   // 1️⃣ Find user
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email }).select("+password");
 
   if (!user) {
     return {

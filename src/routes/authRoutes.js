@@ -3,6 +3,7 @@ import * as authController from "../controllers/authController.js";
 import zodValidation from "../middlewares/zodValidation.js";
 import { loginSchema, registerSchema } from "../scehma/authSchema.js";
 import { protect } from "../middlewares/authMiddelware.js";
+import { authorize } from "../middlewares/roleMiddleware.js";
 
 const router = express.Router();
 router.post(
@@ -10,7 +11,7 @@ router.post(
   zodValidation(registerSchema),
   authController.registerUser,
 );
-router.get("/me", protect, authController.getMyAuthDetails);
+router.get("/me", protect, authorize("ADMIN"), authController.getMyAuthDetails);
 router.post("/login", zodValidation(loginSchema), authController.loginUser);
 
 export default router;
