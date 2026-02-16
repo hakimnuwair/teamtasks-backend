@@ -3,6 +3,7 @@ import {
   generateAccessToken,
   generateRefreshToken,
 } from "../utils/generateToken.js";
+import jwt from "jsonwebtoken";
 
 export const saveUser = async (user) => {
   try {
@@ -16,6 +17,26 @@ export const saveUser = async (user) => {
   } catch (error) {
     throw error;
   }
+};
+
+export const handleRefreshToken = async (refreshToken) => {
+  if (!refreshToken) {
+    throw new Error("No refresh token");
+  }
+
+  const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+
+  const user = await User.findById(decoded.id).select("+refreshToken");
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  if (user.refreshToken !== refreshToken) {
+    throw new Error("Invalid refresh token");
+  }
+
+  return generateAccessToken(user);
 };
 
 export const getCurrentUserDetails = async (user) => {
@@ -32,7 +53,6 @@ export const getCurrentUserDetails = async (user) => {
 };
 
 export const loginUser = async ({ email, password }) => {
-  // 1️⃣ Find user
   const user = await User.findOne({ email }).select("+password");
 
   if (!user) {
@@ -42,7 +62,6 @@ export const loginUser = async ({ email, password }) => {
     };
   }
 
-  // 2️⃣ Check account status
   if (user.status !== "ACTIVE") {
     return {
       success: false,
@@ -50,7 +69,6 @@ export const loginUser = async ({ email, password }) => {
     };
   }
 
-  // 3️⃣ Compare password
   const isMatch = await user.comparePassword(password);
 
   if (!isMatch) {
@@ -60,9 +78,11 @@ export const loginUser = async ({ email, password }) => {
     };
   }
 
-  // 4️⃣ Generate tokens
   const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
+
+  user.refreshToken = refreshToken;
+  await user.save();
 
   return {
     success: true,
@@ -77,4 +97,15 @@ export const loginUser = async ({ email, password }) => {
       },
     },
   };
+};
+
+export const handleLogout = async (refreshToken) => {
+  if (!refreshToken) return;
+
+  const user = await User.findOne({ refreshToken });
+
+  if (user) {
+    user.refreshToken = null;
+    await user.save();
+  }
 };

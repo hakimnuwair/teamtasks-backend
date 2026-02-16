@@ -42,6 +42,11 @@ const userSchema = new mongoose.Schema(
       enum: ["ACTIVE", "INACTIVE", "DELETED"],
       default: "ACTIVE",
     },
+
+    refreshToken: {
+      type: String,
+      select: false,
+    },
   },
   { timestamps: true },
 );
