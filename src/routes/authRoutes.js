@@ -15,6 +15,6 @@ router.post(
 router.post("/refresh-token", authController.refreshAccessToken);
 router.get("/me", protect, authorize("ADMIN"), authController.getMyAuthDetails);
 router.post("/login", zodValidation(loginSchema), authController.loginUser);
-router.post("/logout", authController.logoutUser);
+router.post("/logout", protect, authController.logoutUser);
 
 export default router;

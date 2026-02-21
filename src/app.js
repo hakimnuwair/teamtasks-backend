@@ -3,6 +3,8 @@ import dotenv from "dotenv";
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import groupRoutes from "./routes/groupRoutes.js";
+
 // security middleware
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -40,8 +42,30 @@ app.use(limiter);
 
 app.use(express.json());
 
+app.use((req, res, next) => {
+  const start = Date.now();
+
+  console.log("------------- REQUEST -------------");
+  console.log("Method:", req.method);
+  console.log("URL:", req.originalUrl);
+  console.log("Headers:", req.headers);
+  console.log("Body:", req.body);
+
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+
+    console.log("------------- RESPONSE ------------");
+    console.log("Status:", res.statusCode);
+    console.log("Response Time:", duration + "ms");
+    console.log("-----------------------------------\n");
+  });
+
+  next();
+});
+
 app.use(`${versionPrefix}/auth`, authRoutes);
 app.use(`${versionPrefix}/users`, userRoutes);
+app.use(`${versionPrefix}/groups`, groupRoutes);
 
 // ------- Server ----------
 

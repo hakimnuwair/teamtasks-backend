@@ -13,7 +13,10 @@ export const saveUser = async (user) => {
       password: user.password,
       role: "USER",
     });
-    return newUser.save();
+
+    const userObject = newUser.toObject();
+    delete userObject.password;
+    return userObject;
   } catch (error) {
     throw error;
   }
