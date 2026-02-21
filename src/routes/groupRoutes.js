@@ -17,7 +17,7 @@ router.use(protect);
 router.post("/", zodValidation(createGroupSchema), groupController.createGroup);
 router.get("/", groupController.getUserGroups);
 router.get("/:id", groupController.getGroupById);
-router.put(
+router.patch(
   "/:id",
   zodValidation(updateGroupSchema),
   groupController.updateGroup,

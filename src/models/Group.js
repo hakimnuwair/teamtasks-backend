@@ -52,6 +52,14 @@ const groupSchema = new mongoose.Schema(
 groupSchema.index({ "members.userId": 1 });
 groupSchema.index({ createdBy: 1 });
 
+groupSchema.index(
+  { name: 1, createdBy: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isActive: true },
+  },
+);
+
 // Virtual: member count
 groupSchema.virtual("memberCount").get(function () {
   return this.members.length;

@@ -1,4 +1,42 @@
 import ActivityLog from "../models/ActivityLog.js";
+import Reminder from "../models/Reminder.js";
+import User from "../models/User.js";
+
+const enrichMetadataUsers = async (logs) => {
+  const userIdFields = ["invitedUserId", "removedUserId", "targetUserId"];
+
+  const metaUserIds = [
+    ...new Set(
+      logs.flatMap((log) =>
+        userIdFields
+          .filter((f) => log.metadata?.[f])
+          .map((f) => log.metadata[f].toString()),
+      ),
+    ),
+  ];
+
+  if (metaUserIds.length === 0) return;
+
+  const users = await User.find(
+    { _id: { $in: metaUserIds } },
+    "name email",
+  ).lean();
+  const userMap = Object.fromEntries(
+    users.map((u) => [
+      u._id.toString(),
+      { _id: u._id, name: u.name, email: u.email },
+    ]),
+  );
+
+  for (const log of logs) {
+    for (const field of userIdFields) {
+      if (log.metadata?.[field]) {
+        log.metadata[field] =
+          userMap[log.metadata[field].toString()] ?? log.metadata[field];
+      }
+    }
+  }
+};
 
 /**
  * Creates an activity log entry.
@@ -69,13 +107,10 @@ export const getGroupLogs = async ({ groupId, page = 1, limit = 20 }) => {
     ActivityLog.countDocuments({ groupId }),
   ]);
 
+  await enrichMetadataUsers(logs);
+
   return {
     logs,
-    pagination: {
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    },
+    pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
   };
 };

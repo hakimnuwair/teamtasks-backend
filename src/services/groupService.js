@@ -15,6 +15,16 @@ export const createGroup = async ({
   session.startTransaction();
 
   try {
+    const existingGroup = await Group.findOne({
+      name: name.trim(),
+      createdBy: creatorId,
+      isActive: true,
+    }).session(session);
+
+    if (existingGroup) {
+      throw new Error("You already have a group with this name");
+    }
+
     // 1. Create group with creator as ADMIN
     const [group] = await Group.create(
       [
