@@ -4,6 +4,7 @@ import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
+import reminderRoutes from "./routes/reminderRoutes.js";
 
 // security middleware
 import helmet from "helmet";
@@ -66,6 +67,7 @@ app.use((req, res, next) => {
 app.use(`${versionPrefix}/auth`, authRoutes);
 app.use(`${versionPrefix}/users`, userRoutes);
 app.use(`${versionPrefix}/groups`, groupRoutes);
+app.use(`${versionPrefix}/reminders`, reminderRoutes);
 
 // ------- Server ----------
 
