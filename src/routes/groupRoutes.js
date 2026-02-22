@@ -8,6 +8,7 @@ import {
   inviteMemberSchema,
   changeMemberRoleSchema,
 } from "../scehma/groupReminderSchema.js";
+import * as reminderController from "../controllers/reminderController.js";
 
 const router = express.Router();
 
@@ -36,6 +37,10 @@ router.patch(
   zodValidation(changeMemberRoleSchema),
   groupController.changeMemberRole,
 );
+
+// Group reminders
+// GET /groups/:groupId/reminders is handled in groupRoutes via reminderController
+router.get("/:groupId/reminders", reminderController.getGroupReminders);
 
 // Group activity logs
 router.get("/:id/activity", groupController.getGroupActivityLogs);

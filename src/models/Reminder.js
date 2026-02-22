@@ -57,6 +57,19 @@ const reminderSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true },
 );
@@ -66,6 +79,36 @@ reminderSchema.index({ assignedUsers: 1 });
 reminderSchema.index({ groupId: 1 });
 reminderSchema.index({ createdBy: 1 });
 reminderSchema.index({ dueDateTime: 1, status: 1, notificationSent: 1 }); // for scheduler
+
+// Personal
+reminderSchema.index(
+  { title: 1, createdBy: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      groupId: null,
+      status: "PENDING",
+    },
+  },
+);
+
+// Group
+reminderSchema.index(
+  { title: 1, groupId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      groupId: { $type: "objectId" },
+      status: "PENDING",
+    },
+  },
+);
+
+reminderSchema.pre(/^find/, function () {
+  if (!this.getOptions()?.includeDeleted) {
+    this.where({ isDeleted: false });
+  }
+});
 
 const Reminder = mongoose.model("Reminder", reminderSchema);
 export default Reminder;

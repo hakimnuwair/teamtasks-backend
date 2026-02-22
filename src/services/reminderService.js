@@ -180,6 +180,7 @@ export const getGroupReminders = async ({
       .limit(limit)
       .populate("createdBy", "name email")
       .populate("assignedUsers", "name email")
+      .populate("groupId", "name")
       .lean(),
     Reminder.countDocuments(filter),
   ]);
@@ -332,13 +333,30 @@ export const deleteReminder = async ({
 
   try {
     const reminder = await Reminder.findById(reminderId).session(session);
+
     if (!reminder) throw new Error("Reminder not found");
 
-    if (reminder.createdBy.toString() !== requestingUserId.toString())
+    if (reminder.createdBy.toString() !== requestingUserId.toString()) {
       throw new Error("Only the creator can delete this reminder");
+    }
 
-    // Delete related notifications
-    await Notification.deleteMany({ reminderId: reminder._id }, { session });
+    if (reminder.isDeleted) {
+      throw new Error("Reminder is already deleted");
+    }
+
+    // ✅ SOFT DELETE
+    reminder.isDeleted = true;
+    reminder.deletedAt = new Date();
+    reminder.deletedBy = requestingUserId;
+
+    await reminder.save({ session });
+
+    // Mark related notifications as deleted instead of removing
+    await Notification.updateMany(
+      { reminderId: reminder._id },
+      { $set: { isDeleted: true } },
+      { session },
+    );
 
     await createLog(
       {
@@ -352,9 +370,8 @@ export const deleteReminder = async ({
       session,
     );
 
-    await Reminder.findByIdAndDelete(reminderId, { session });
-
     await session.commitTransaction();
+
     return { message: "Reminder deleted successfully" };
   } catch (error) {
     await session.abortTransaction();

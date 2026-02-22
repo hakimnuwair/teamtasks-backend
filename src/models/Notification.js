@@ -38,7 +38,19 @@ const notificationSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-notificationSchema.index({ userId: 1, isRead: 1, createdAt: -1 });
+notificationSchema.index({
+  userId: 1,
+  isRead: 1,
+  isDeleted: 1,
+  createdAt: -1,
+});
+
+notificationSchema.pre(/^find/, function (next) {
+  if (!this.getOptions().includeDeleted) {
+    this.where({ isDeleted: false });
+  }
+  next();
+});
 
 const Notification = mongoose.model("Notification", notificationSchema);
 export default Notification;

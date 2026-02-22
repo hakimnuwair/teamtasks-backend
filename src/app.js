@@ -51,6 +51,8 @@ app.use((req, res, next) => {
   console.log("URL:", req.originalUrl);
   console.log("Headers:", req.headers);
   console.log("Body:", req.body);
+  console.log("Params:", req.params);
+  console.log("Query:", req.query);
 
   res.on("finish", () => {
     const duration = Date.now() - start;

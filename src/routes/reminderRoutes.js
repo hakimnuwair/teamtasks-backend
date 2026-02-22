@@ -18,7 +18,7 @@ router.post(
 );
 router.get("/", reminderController.getMyReminders);
 router.get("/:id", reminderController.getReminderById);
-router.put(
+router.patch(
   "/:id",
   zodValidation(updateReminderSchema),
   reminderController.updateReminder,
