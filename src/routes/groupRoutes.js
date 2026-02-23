@@ -9,6 +9,7 @@ import {
   changeMemberRoleSchema,
 } from "../scehma/groupReminderSchema.js";
 import * as reminderController from "../controllers/reminderController.js";
+import { getGroupRemindersHandler } from "./reminderRoutes.js";
 
 const router = express.Router();
 
@@ -40,7 +41,7 @@ router.patch(
 
 // Group reminders
 // GET /groups/:groupId/reminders is handled in groupRoutes via reminderController
-router.get("/:groupId/reminders", reminderController.getGroupReminders);
+router.get("/:groupId/reminders", getGroupRemindersHandler);
 
 // Group activity logs
 router.get("/:id/activity", groupController.getGroupActivityLogs);

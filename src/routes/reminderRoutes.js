@@ -26,7 +26,6 @@ router.patch(
 router.delete("/:id", reminderController.deleteReminder);
 router.post("/:id/complete", reminderController.completeReminder);
 
-// Group-scoped reminders — mounted separately but included here for clarity
 // GET /groups/:groupId/reminders is handled in groupRoutes via reminderController
 export const getGroupRemindersHandler = reminderController.getGroupReminders;
 

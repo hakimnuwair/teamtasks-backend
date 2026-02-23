@@ -34,6 +34,19 @@ const notificationSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true },
 );
@@ -45,11 +58,10 @@ notificationSchema.index({
   createdAt: -1,
 });
 
-notificationSchema.pre(/^find/, function (next) {
-  if (!this.getOptions().includeDeleted) {
+notificationSchema.pre(/^find/, function () {
+  if (!this.getOptions()?.includeDeleted) {
     this.where({ isDeleted: false });
   }
-  next();
 });
 
 const Notification = mongoose.model("Notification", notificationSchema);

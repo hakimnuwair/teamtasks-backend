@@ -5,7 +5,7 @@ import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
 import reminderRoutes from "./routes/reminderRoutes.js";
-
+import notificationRoutes from "./routes/NotificationRoutes.js";
 // security middleware
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -70,6 +70,7 @@ app.use(`${versionPrefix}/auth`, authRoutes);
 app.use(`${versionPrefix}/users`, userRoutes);
 app.use(`${versionPrefix}/groups`, groupRoutes);
 app.use(`${versionPrefix}/reminders`, reminderRoutes);
+app.use(`${versionPrefix}/notifications`, notificationRoutes);
 
 // ------- Server ----------
 
