@@ -5,7 +5,14 @@ import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
 import reminderRoutes from "./routes/reminderRoutes.js";
-import notificationRoutes from "./routes/NotificationRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
+import activityRoutes from "./routes/activityRoutes.js";
+
+import { createServer } from "http";
+
+import { Server } from "socket.io";
+import { startReminderScheduler } from "./utils/startReminderScheduler.js";
+
 // security middleware
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -14,9 +21,19 @@ import cors from "cors";
 // import xss from "xss-clean";
 import cookieParser from "cookie-parser";
 
+// ──────────────────────────────────────────────────────────
 const app = express();
+const httpServer = createServer(app);
 dotenv.config();
 const versionPrefix = process.env.versionPrefix;
+
+// ─── Socket.io Setup ──────────────────────────────────────────────────────────
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    credentials: true,
+  },
+});
 
 // middleware
 // ----- Security Middleware -----
@@ -71,11 +88,16 @@ app.use(`${versionPrefix}/users`, userRoutes);
 app.use(`${versionPrefix}/groups`, groupRoutes);
 app.use(`${versionPrefix}/reminders`, reminderRoutes);
 app.use(`${versionPrefix}/notifications`, notificationRoutes);
+app.use(`${versionPrefix}/activity`, activityRoutes);
+
+app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
 
 // ------- Server ----------
 
-connectDB();
+connectDB().then(() => {
+  startReminderScheduler(io);
 
-app.listen(process.env.PORT, () => {
-  console.log(`server started on PORT ${process.env.PORT}`);
+  httpServer.listen(process.env.PORT || 5000, () => {
+    console.log(`[Server] Running on PORT ${process.env.PORT || 5000} ✅`);
+  });
 });
