@@ -30,9 +30,12 @@ export const refreshAccessToken = async (req, res) => {
 
 export const getMyAuthDetails = async (req, res) => {
   try {
-    const response = await authService.getCurrentUserDetails(req.body);
+    const response = await authService.getCurrentUserDetails(req.user);
     if (response) {
-      res.status(200).json(response);
+      res.status(200).json({
+        success: true,
+        data: response,
+      });
     } else {
       res.status(404).json({ message: "User not found" });
     }

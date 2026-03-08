@@ -13,7 +13,7 @@ router.post(
 );
 
 router.post("/refresh-token", authController.refreshAccessToken);
-router.get("/me", protect, authorize("ADMIN"), authController.getMyAuthDetails);
+router.get("/me", protect, authController.getMyAuthDetails);
 router.post("/login", zodValidation(loginSchema), authController.loginUser);
 router.post("/logout", protect, authController.logoutUser);
 
