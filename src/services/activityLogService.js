@@ -73,6 +73,7 @@ export const getUserLogs = async ({ userId, page = 1, limit = 20 }) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
+      .populate("userId", "name")
       .populate("groupId", "name")
       .populate("reminderId", "title")
       .lean(),
