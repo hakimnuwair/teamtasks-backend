@@ -27,6 +27,13 @@ const activityLogSchema = new mongoose.Schema(
         "GROUP_MEMBER_ADDED",
         "GROUP_MEMBER_REMOVED",
         "GROUP_ROLE_CHANGED",
+
+        // Invitation actions
+        "GROUP_INVITATION_SENT",
+        "GROUP_INVITATION_ACCEPTED",
+        "GROUP_INVITATION_DECLINED",
+        "GROUP_INVITATION_CANCELLED",
+
         // Reminder actions
         "REMINDER_CREATED",
         "REMINDER_UPDATED",

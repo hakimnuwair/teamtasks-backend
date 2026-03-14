@@ -7,6 +7,7 @@ import groupRoutes from "./routes/groupRoutes.js";
 import reminderRoutes from "./routes/reminderRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
+import invitationRoutes from "./routes/invitationRoutes.js";
 
 import { createServer } from "http";
 
@@ -86,6 +87,7 @@ app.use((req, res, next) => {
 app.use(`${versionPrefix}/auth`, authRoutes);
 app.use(`${versionPrefix}/users`, userRoutes);
 app.use(`${versionPrefix}/groups`, groupRoutes);
+app.use(`${versionPrefix}/invitations`, invitationRoutes);
 app.use(`${versionPrefix}/reminders`, reminderRoutes);
 app.use(`${versionPrefix}/notifications`, notificationRoutes);
 app.use(`${versionPrefix}/activity`, activityRoutes);

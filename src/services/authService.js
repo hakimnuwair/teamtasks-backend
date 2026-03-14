@@ -7,6 +7,7 @@ import jwt from "jsonwebtoken";
 
 export const saveUser = async (user) => {
   try {
+    console.log("user: ", user);
     const newUser = await User.create({
       name: user.name,
       email: user.email,

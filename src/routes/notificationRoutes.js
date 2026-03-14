@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(protect);
 
 router.get("/", notificationController.getNotifications);
-router.post(
+router.patch(
   "/read",
   zodValidation(markNotificationsReadSchema),
   notificationController.markAsRead,
