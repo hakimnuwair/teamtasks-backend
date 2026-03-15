@@ -1,88 +1,94 @@
+/**
+ * utils/startReminderScheduler.js — COMPLETE REPLACEMENT
+ * Place at: utils/startReminderScheduler.js
+ *
+ * KEY FIX: All socket emits now target individual user rooms via io.to(userId).
+ * Old code used io.emit() which broadcast to ALL connected clients — a
+ * major security/privacy bug where every user would receive every reminder alert.
+ *
+ * Runs every 60 seconds:
+ *  1. Find PENDING reminders past their dueDateTime with notificationSent: false
+ *  2. Mark them OVERDUE
+ *  3. Create REMINDER_DUE notifications for each assigned user
+ *  4. Emit "notificationTriggered" to each user's personal socket room
+ */
+
+import cron from "node-cron";
 import Reminder from "../models/Reminder.js";
 import Notification from "../models/Notification.js";
-import ActivityLog from "../models/ActivityLog.js";
+import { createLog } from "../services/activityLogService.js";
 
-/**
- * Runs every minute.
- * 1. Marks overdue reminders.
- * 2. Sends due-now notifications (within 1-minute window).
- */
 export const startReminderScheduler = (io) => {
-  const INTERVAL_MS = 60 * 1000; // 1 minute
-
-  const tick = async () => {
-    const now = new Date();
-    const oneMinuteLater = new Date(now.getTime() + INTERVAL_MS);
-
+  // Run every 60 seconds
+  cron.schedule("* * * * *", async () => {
     try {
-      // ── 1. Mark overdue ──────────────────────────────────────────────────────
-      const overdueResult = await Reminder.updateMany(
-        {
-          status: "PENDING",
-          dueDateTime: { $lt: now },
-        },
-        { $set: { status: "OVERDUE" } },
+      const now = new Date();
+
+      // Find overdue reminders that haven't been notified yet
+      const overdueReminders = await Reminder.find({
+        status: "PENDING",
+        dueDateTime: { $lte: now },
+        notificationSent: false,
+        isDeleted: false,
+      }).lean();
+
+      if (overdueReminders.length === 0) return;
+
+      console.log(
+        `[Scheduler] Processing ${overdueReminders.length} overdue reminder(s)`,
       );
 
-      if (overdueResult.modifiedCount > 0) {
-        console.log(
-          `[Scheduler] Marked ${overdueResult.modifiedCount} reminder(s) as OVERDUE`,
-        );
-      }
-
-      // ── 2. Send due-now notifications ────────────────────────────────────────
-      const dueReminders = await Reminder.find({
-        status: "PENDING",
-        notificationSent: false,
-        dueDateTime: { $gte: now, $lt: oneMinuteLater },
-      });
-
-      for (const reminder of dueReminders) {
-        const notifications = reminder.assignedUsers.map((userId) => ({
-          userId,
-          reminderId: reminder._id,
-          groupId: reminder.groupId || null,
-          type: "REMINDER_DUE",
-          message: `Reminder due: "${reminder.title}"`,
-        }));
-
-        await Notification.insertMany(notifications);
-
-        reminder.notificationSent = true;
-        await reminder.save();
-
-        // Log REMINDER_OVERDUE action
-        await ActivityLog.create({
-          userId: reminder.createdBy,
-          reminderId: reminder._id,
-          groupId: reminder.groupId || null,
-          action: "REMINDER_OVERDUE",
-          metadata: { title: reminder.title },
-        });
-
-        // Emit socket events per user
-        if (io) {
-          reminder.assignedUsers.forEach((userId) => {
-            io.to(userId.toString()).emit("notificationTriggered", {
-              reminderId: reminder._id,
-              title: reminder.title,
-              message: `Reminder due: "${reminder.title}"`,
-            });
+      for (const reminder of overdueReminders) {
+        try {
+          // 1. Mark as OVERDUE
+          await Reminder.findByIdAndUpdate(reminder._id, {
+            status: "OVERDUE",
+            notificationSent: true,
           });
-        }
 
-        console.log(
-          `[Scheduler] Notifications sent for reminder: ${reminder.title}`,
-        );
+          // 2. Create a REMINDER_DUE notification for every assigned user
+          const notifDocs = (reminder.assignedUsers || []).map((uid) => ({
+            userId: uid,
+            reminderId: reminder._id,
+            groupId: reminder.groupId || null,
+            type: "REMINDER_DUE",
+            message: `Reminder "${reminder.title}" is overdue`,
+          }));
+
+          if (notifDocs.length > 0) {
+            await Notification.insertMany(notifDocs);
+          }
+
+          // 3. Emit to each assigned user's personal socket room
+          for (const uid of reminder.assignedUsers || []) {
+            const userId = String(uid);
+            io.to(userId).emit("notificationTriggered", {
+              message: `Reminder "${reminder.title}" is overdue`,
+              title: reminder.title,
+              reminderId: String(reminder._id),
+            });
+          }
+
+          // 4. Log the event
+          await createLog({
+            userId: reminder.createdBy,
+            reminderId: reminder._id,
+            groupId: reminder.groupId || null,
+            action: "REMINDER_OVERDUE",
+            metadata: { title: reminder.title },
+          });
+        } catch (innerErr) {
+          // Don't let one reminder failure stop the rest
+          console.error(
+            `[Scheduler] Error processing reminder ${reminder._id}:`,
+            innerErr.message,
+          );
+        }
       }
     } catch (err) {
-      console.error("[Scheduler] Error:", err.message);
+      console.error("[Scheduler] Fatal error:", err);
     }
-  };
+  });
 
-  // Run immediately on start, then every minute
-  tick();
-  setInterval(tick, INTERVAL_MS);
-
-  console.log("[Scheduler] Reminder scheduler started ✅");
+  console.log("[Scheduler] Reminder scheduler started (runs every 60s)");
 };

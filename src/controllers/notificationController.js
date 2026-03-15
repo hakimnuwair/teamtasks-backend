@@ -1,6 +1,12 @@
-import * as notificationService from "../services/notificationService.js";
+/**
+ * controllers/notificationController.js — COMPLETE REPLACEMENT
+ * Place at: controllers/notificationController.js
+ */
 
-export const getNotifications = async (req, res) => {
+import * as notificationService from "../services/notificationService.js";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
+
+export const getNotifications = async (req, res, next) => {
   try {
     const { page, limit, unreadOnly } = req.query;
     const result = await notificationService.getUserNotifications({
@@ -9,42 +15,41 @@ export const getNotifications = async (req, res) => {
       limit: parseInt(limit) || 20,
       unreadOnly: unreadOnly === "true",
     });
-    return res.status(200).json({ success: true, ...result });
+    return sendSuccess(res, result, "Notifications retrieved");
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-export const markAsRead = async (req, res) => {
+export const markAsRead = async (req, res, next) => {
   try {
     const result = await notificationService.markAsRead({
       userId: req.user._id,
       notificationIds: req.body.notificationIds,
     });
-    return res.status(200).json({ success: true, ...result });
+    return sendSuccess(res, result, "Notifications marked as read");
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-export const markAllAsRead = async (req, res) => {
+export const markAllAsRead = async (req, res, next) => {
   try {
     const result = await notificationService.markAllAsRead(req.user._id);
-    return res.status(200).json({ success: true, ...result });
+    return sendSuccess(res, result, "All notifications marked as read");
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-export const deleteNotification = async (req, res) => {
+export const deleteNotification = async (req, res, next) => {
   try {
-    const result = await notificationService.deleteNotification({
+    await notificationService.deleteNotification({
       userId: req.user._id,
       notificationId: req.params.id,
     });
-    return res.status(200).json({ success: true, ...result });
+    return sendSuccess(res, null, "Notification deleted");
   } catch (error) {
-    const status = error.message.includes("not found") ? 404 : 500;
-    return res.status(status).json({ success: false, message: error.message });
+    next(error);
   }
 };

@@ -1,17 +1,20 @@
+/**
+ * controllers/activityController.js — COMPLETE REPLACEMENT
+ * Place at: controllers/activityController.js
+ */
+
 import * as activityLogService from "../services/activityLogService.js";
+import { sendSuccess } from "../utils/apiResponse.js";
 
-export const getMyActivityLogs = async (req, res) => {
+export const getMyActivityLogs = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-
     const result = await activityLogService.getUserLogs({
       userId: req.user._id,
-      page,
-      limit,
+      page: parseInt(req.query.page) || 1,
+      limit: parseInt(req.query.limit) || 20,
     });
-    return res.status(200).json({ success: true, ...result });
+    return sendSuccess(res, result, "Activity logs retrieved");
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };

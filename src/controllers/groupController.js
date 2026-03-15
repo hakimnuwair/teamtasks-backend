@@ -1,45 +1,50 @@
+/**
+ * controllers/groupController.js — COMPLETE REPLACEMENT
+ *
+ * Changes:
+ *  1. Consistent responses via apiResponse helpers
+ *  2. io.emit() → io.to(userId).emit() for groupMemberAdded
+ *  3. next(error) throughout
+ */
+
 import * as groupService from "../services/groupService.js";
 import * as activityLogService from "../services/activityLogService.js";
+import { sendSuccess, sendCreated } from "../utils/apiResponse.js";
 
 const getIp = (req) => req.ip || req.headers["x-forwarded-for"] || null;
 
-export const createGroup = async (req, res) => {
+export const createGroup = async (req, res, next) => {
   try {
     const group = await groupService.createGroup({
       ...req.body,
       creatorId: req.user._id,
       ipAddress: getIp(req),
     });
-    return res.status(201).json({ success: true, data: group });
+    return sendCreated(res, group, "Group created");
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-export const getUserGroups = async (req, res) => {
+export const getUserGroups = async (req, res, next) => {
   try {
     const groups = await groupService.getUserGroups(req.user._id);
-    return res.status(200).json({ success: true, data: groups });
+    return sendSuccess(res, groups, "Groups retrieved");
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-export const getGroupById = async (req, res) => {
+export const getGroupById = async (req, res, next) => {
   try {
     const group = await groupService.getGroupById(req.params.id, req.user._id);
-    return res.status(200).json({ success: true, data: group });
+    return sendSuccess(res, group, "Group retrieved");
   } catch (error) {
-    const status = error.message.includes("not found")
-      ? 404
-      : error.message.includes("denied")
-        ? 403
-        : 500;
-    return res.status(status).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-export const updateGroup = async (req, res) => {
+export const updateGroup = async (req, res, next) => {
   try {
     const group = await groupService.updateGroup({
       groupId: req.params.id,
@@ -47,18 +52,13 @@ export const updateGroup = async (req, res) => {
       updates: req.body,
       ipAddress: getIp(req),
     });
-    return res.status(200).json({ success: true, data: group });
+    return sendSuccess(res, group, "Group updated");
   } catch (error) {
-    const status = error.message.includes("not found")
-      ? 404
-      : error.message.includes("Only")
-        ? 403
-        : 500;
-    return res.status(status).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-export const inviteMember = async (req, res) => {
+export const inviteMember = async (req, res, next) => {
   try {
     const result = await groupService.inviteMember({
       groupId: req.params.id,
@@ -68,24 +68,22 @@ export const inviteMember = async (req, res) => {
       ipAddress: getIp(req),
     });
 
-    // Emit socket event
+    // Emit only to the newly added user's room
     const io = req.app.get("io");
-    if (io) io.emit("groupMemberAdded", { groupId: req.params.id, ...result });
+    if (io && result.userId) {
+      io.to(String(result.userId)).emit("groupMemberAdded", {
+        groupId: req.params.id,
+        userId: result.userId,
+      });
+    }
 
-    return res.status(200).json({ success: true, ...result });
+    return sendSuccess(res, result, "Member invited successfully");
   } catch (error) {
-    const status = error.message.includes("not found")
-      ? 404
-      : error.message.includes("Only")
-        ? 403
-        : error.message.includes("already")
-          ? 409
-          : 500;
-    return res.status(status).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-export const removeMember = async (req, res) => {
+export const removeMember = async (req, res, next) => {
   try {
     const result = await groupService.removeMember({
       groupId: req.params.id,
@@ -93,18 +91,13 @@ export const removeMember = async (req, res) => {
       targetUserId: req.params.userId,
       ipAddress: getIp(req),
     });
-    return res.status(200).json({ success: true, ...result });
+    return sendSuccess(res, null, result.message || "Member removed");
   } catch (error) {
-    const status = error.message.includes("not found")
-      ? 404
-      : error.message.includes("Only")
-        ? 403
-        : 500;
-    return res.status(status).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-export const changeMemberRole = async (req, res) => {
+export const changeMemberRole = async (req, res, next) => {
   try {
     const result = await groupService.changeMemberRole({
       groupId: req.params.id,
@@ -113,50 +106,35 @@ export const changeMemberRole = async (req, res) => {
       role: req.body.role,
       ipAddress: getIp(req),
     });
-    return res.status(200).json({ success: true, ...result });
+    return sendSuccess(res, null, result.message || "Role updated");
   } catch (error) {
-    const status = error.message.includes("not found")
-      ? 404
-      : error.message.includes("Only")
-        ? 403
-        : 500;
-    return res.status(status).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-export const deleteGroup = async (req, res) => {
+export const deleteGroup = async (req, res, next) => {
   try {
     const result = await groupService.deleteGroup({
       groupId: req.params.id,
       requestingUserId: req.user._id,
       ipAddress: getIp(req),
     });
-    return res.status(200).json({ success: true, ...result });
+    return sendSuccess(res, null, result.message || "Group deleted");
   } catch (error) {
-    const status = error.message.includes("not found")
-      ? 404
-      : error.message.includes("Only")
-        ? 403
-        : 500;
-    return res.status(status).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-export const getGroupActivityLogs = async (req, res) => {
+export const getGroupActivityLogs = async (req, res, next) => {
   try {
-    // Validate requester is a group member (getGroupById does the check)
     await groupService.getGroupById(req.params.id, req.user._id);
-
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-
     const result = await activityLogService.getGroupLogs({
       groupId: req.params.id,
-      page,
-      limit,
+      page: parseInt(req.query.page) || 1,
+      limit: parseInt(req.query.limit) || 20,
     });
-    return res.status(200).json({ success: true, ...result });
+    return sendSuccess(res, result, "Activity logs retrieved");
   } catch (error) {
-    return res.status(403).json({ success: false, message: error.message });
+    next(error);
   }
 };

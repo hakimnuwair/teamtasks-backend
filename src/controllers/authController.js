@@ -1,102 +1,122 @@
-import * as authService from "../services/authService.js";
+/**
+ * controllers/authController.js
+ *
+ * Handles: register, login, logout, token refresh, /me, forgot password, reset password.
+ * All responses use consistent apiResponse helpers.
+ * User objects are normalized (id string at top level) before sending.
+ */
 
-export const registerUser = async (req, res) => {
+import * as authService from "../services/authService.js";
+import {
+  sendSuccess,
+  sendCreated,
+  sendError,
+  sendUnauthorized,
+  sendNotFound,
+} from "../utils/apiResponse.js";
+
+// Ensures user.id is always a plain string — lean() returns ObjectId
+const normalizeUser = (user) => {
+  if (!user) return user;
+  const obj =
+    typeof user.toObject === "function" ? user.toObject() : { ...user };
+  obj.id = String(obj._id ?? obj.id ?? "");
+  return obj;
+};
+
+export const registerUser = async (req, res, next) => {
   try {
-    const response = await authService.saveUser(req.body);
-    res.status(200).json(response);
+    const user = await authService.saveUser(req.body);
+    return sendCreated(
+      res,
+      normalizeUser(user),
+      "Account created successfully",
+    );
   } catch (error) {
-    console.log("register error: ", error);
-    res.status(500).json({ message: "Internal server error" });
+    next(error);
   }
 };
 
-export const refreshAccessToken = async (req, res) => {
+export const refreshAccessToken = async (req, res, next) => {
   try {
     const refreshToken = req.cookies.refreshToken;
-
-    const newAccessToken = await authService.handleRefreshToken(refreshToken);
-
-    return res.status(200).json({
-      success: true,
-      accessToken: newAccessToken,
-    });
+    if (!refreshToken)
+      return sendUnauthorized(res, "No refresh token provided");
+    const accessToken = await authService.handleRefreshToken(refreshToken);
+    return sendSuccess(res, { accessToken }, "Token refreshed");
   } catch (error) {
-    return res.status(401).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };
 
-export const getMyAuthDetails = async (req, res) => {
+export const getMyAuthDetails = async (req, res, next) => {
   try {
-    const response = await authService.getCurrentUserDetails(req.user);
-    if (response) {
-      res.status(200).json({
-        success: true,
-        data: response,
-      });
-    } else {
-      res.status(404).json({ message: "User not found" });
-    }
+    const user = await authService.getCurrentUserDetails(req.user);
+    if (!user) return sendNotFound(res, "User not found");
+    return sendSuccess(res, normalizeUser(user), "User details retrieved");
   } catch (error) {
-    res.status(500).json({ message: "Internal server error" });
+    next(error);
   }
 };
 
-export const loginUser = async (req, res) => {
+export const loginUser = async (req, res, next) => {
   try {
     const { email, password } = req.body;
-
     const response = await authService.loginUser({ email, password });
-
     if (!response.success) {
-      return res.status(401).json({
-        message: response.message,
-      });
+      return sendError(res, response.message, 401, "INVALID_CREDENTIALS");
     }
-
     const { accessToken, refreshToken, user } = response.data;
-
-    // Set Refresh Token in httpOnly cookie
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: false, // true in production (HTTPS)
-      sameSite: "lax", // "none" in production with HTTPS
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-
-    // Send access token in response body
-    return res.status(200).json({
-      accessToken,
-      user,
-    });
+    return sendSuccess(
+      res,
+      { accessToken, user: normalizeUser(user) },
+      "Login successful",
+    );
   } catch (error) {
-    console.error("Login Error:", error);
-    return res.status(500).json({
-      message: "Internal server error",
-    });
+    next(error);
   }
 };
 
-export const logoutUser = async (req, res) => {
+export const logoutUser = async (req, res, next) => {
   try {
     const refreshToken = req.cookies.refreshToken;
-
     await authService.handleLogout(refreshToken);
-
     res.clearCookie("refreshToken", {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     });
-
-    return res.status(200).json({
-      message: "Logged out successfully",
-    });
+    return sendSuccess(res, null, "Logged out successfully");
   } catch (error) {
-    return res.status(500).json({
-      message: "Internal server error",
-    });
+    next(error);
+  }
+};
+
+// POST /auth/forgot-password  { email }
+// Returns success message always (prevents email enumeration).
+// In development, also returns resetToken for testing without email setup.
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const result = await authService.requestPasswordReset(req.body.email);
+    return sendSuccess(res, result, result.message);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /auth/reset-password  { token, newPassword }
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body;
+    const result = await authService.resetPassword(token, newPassword);
+    return sendSuccess(res, null, result.message);
+  } catch (error) {
+    next(error);
   }
 };
