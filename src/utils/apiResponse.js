@@ -1,42 +1,61 @@
 /**
  * utils/apiResponse.js
  *
- * Centralized response helpers. Every controller uses these so the
- * frontend can rely on a single shape for EVERY response.
+ * Consistent response helpers for all controllers.
  *
- * SUCCESS shape:
- *   { success: true, message, data?, [resourceKey]?, pagination? }
+ * Response shapes:
+ *   Object payload: { success, message, ...fields }   (Object.assign flat spread)
+ *   Array payload:  { success, message, data: [...] }
+ *   null payload:   { success, message }
+ *   Error:          { success: false, message, code?, errors? }
  *
- * ERROR shape:
- *   { success: false, message, code?, errors? }
- *
- * Rules:
- *  - message is ALWAYS a human-readable string (never undefined)
- *  - code is a short machine-readable string for the frontend to key on
- *  - errors is an array of field-level validation errors (Zod etc.)
+ * toSafeData() converts any Mongoose Documents to plain objects before
+ * JSON serialization — prevents "Converting circular structure to JSON"
+ * errors that occur when Documents from transactions still hold a MongoClient ref.
  */
+
+// ─── Serialize helper ─────────────────────────────────────────────────────────
+
+function toSafeData(data) {
+  if (data === null || data === undefined) return data;
+
+  // Mongoose Document → plain object (strips session/client references)
+  if (typeof data.toObject === "function") return toSafeData(data.toObject());
+
+  // Array — process each element
+  if (Array.isArray(data)) return data.map(toSafeData);
+
+  // Plain object — recurse into values to catch nested Mongoose Documents
+  if (typeof data === "object" && data.constructor === Object) {
+    return Object.fromEntries(
+      Object.entries(data).map(([k, v]) => [k, toSafeData(v)]),
+    );
+  }
+
+  return data;
+}
 
 // ─── Success ──────────────────────────────────────────────────────────────────
 
-/**
- * sendSuccess(res, data, message?, statusCode?)
- * data can be an object OR a pre-shaped { [key]: [...], pagination }
- */
 export const sendSuccess = (
   res,
   data = null,
   message = "Success",
   statusCode = 200,
 ) => {
+  const safe = toSafeData(data);
   const body = { success: true, message };
-  if (data !== null) {
-    // If data has a top-level key that is an array (paginated list), spread it
-    if (data && typeof data === "object" && !Array.isArray(data)) {
-      Object.assign(body, data);
+
+  if (safe !== null && safe !== undefined) {
+    if (Array.isArray(safe)) {
+      body.data = safe;
+    } else if (typeof safe === "object") {
+      Object.assign(body, safe);
     } else {
-      body.data = data;
+      body.data = safe;
     }
   }
+
   return res.status(statusCode).json(body);
 };
 
@@ -45,14 +64,6 @@ export const sendCreated = (res, data, message = "Created successfully") =>
 
 // ─── Error ────────────────────────────────────────────────────────────────────
 
-/**
- * sendError(res, message, statusCode?, code?, errors?)
- *
- * @param {string}   message    Human-readable description
- * @param {number}   statusCode HTTP status (default 500)
- * @param {string}   code       Machine-readable error key (e.g. "ALREADY_MEMBER")
- * @param {array}    errors     Field-level errors [{ field, message }]
- */
 export const sendError = (
   res,
   message,
@@ -66,7 +77,6 @@ export const sendError = (
   return res.status(statusCode).json(body);
 };
 
-// Convenience aliases
 export const sendNotFound = (res, msg = "Resource not found") =>
   sendError(res, msg, 404, "NOT_FOUND");
 export const sendForbidden = (res, msg = "Access denied") =>
@@ -78,7 +88,6 @@ export const sendBadRequest = (res, msg = "Invalid request") =>
 export const sendConflict = (res, msg = "Resource already exists") =>
   sendError(res, msg, 409, "CONFLICT");
 
-// ─── Error code map — turns common error messages into HTTP codes ─────────────
 export const httpCodeFromMessage = (message) => {
   const m = message?.toLowerCase() ?? "";
   if (m.includes("not found")) return 404;

@@ -1,4 +1,11 @@
-// services/invitationService.js
+/**
+ * services/invitationService.js
+ *
+ * Fix: notification metadata.invitationId is now stored as a plain string,
+ * not a Mongoose ObjectId. This ensures frontend can read it from
+ * notification.metadata.invitationId without type coercion.
+ */
+
 import mongoose from "mongoose";
 import GroupInvitation from "../models/GroupInvitation.js";
 import Group from "../models/Group.js";
@@ -17,34 +24,29 @@ export const sendInvitation = async ({
 }) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-
   try {
     const group = await Group.findOne({ _id: groupId, isActive: true }).session(
       session,
     );
     if (!group) throw new Error("Group not found");
 
-    // Only admins can invite
     const requester = group.members.find(
       (m) => m.userId.toString() === requestingUserId.toString(),
     );
     if (!requester || requester.role !== "ADMIN")
       throw new Error("Only group admins can send invitations");
 
-    // Find the user to invite
     const invitedUser = await User.findOne({ email, status: "ACTIVE" }).session(
       session,
     );
     if (!invitedUser) throw new Error("No active user found with that email");
 
-    // Already a member?
     const alreadyMember = group.members.some(
       (m) => m.userId.toString() === invitedUser._id.toString(),
     );
     if (alreadyMember)
       throw new Error("User is already a member of this group");
 
-    // Already has a pending invite?
     const existing = await GroupInvitation.findOne({
       groupId,
       invitedUser: invitedUser._id,
@@ -53,7 +55,6 @@ export const sendInvitation = async ({
     if (existing)
       throw new Error("A pending invitation already exists for this user");
 
-    // Create invitation
     const [invitation] = await GroupInvitation.create(
       [
         {
@@ -66,7 +67,7 @@ export const sendInvitation = async ({
       { session },
     );
 
-    // Notify the invited user
+    // Store invitationId as STRING — critical for frontend to read from metadata
     await Notification.create(
       [
         {
@@ -74,7 +75,7 @@ export const sendInvitation = async ({
           groupId,
           type: "GROUP_INVITE",
           message: `You have been invited to join "${group.name}"`,
-          metadata: { invitationId: invitation._id },
+          metadata: { invitationId: invitation._id.toString() },
         },
       ],
       { session },
@@ -93,9 +94,9 @@ export const sendInvitation = async ({
 
     await session.commitTransaction();
     return invitation;
-  } catch (error) {
+  } catch (e) {
     await session.abortTransaction();
-    throw error;
+    throw e;
   } finally {
     session.endSession();
   }
@@ -124,7 +125,6 @@ export const respondToInvitation = async ({
 }) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-
   try {
     const invitation = await GroupInvitation.findOne({
       _id: invitationId,
@@ -144,14 +144,12 @@ export const respondToInvitation = async ({
       const group = await Group.findById(invitation.groupId).session(session);
       if (!group || !group.isActive) throw new Error("Group no longer exists");
 
-      // Guard: don't double-add if already a member
       const alreadyMember = group.members.some(
         (m) => m.userId.toString() === requestingUserId.toString(),
       );
       if (!alreadyMember) {
         group.members.push({ userId: requestingUserId, role: invitation.role });
         await group.save({ session });
-
         await User.findByIdAndUpdate(
           requestingUserId,
           { $addToSet: { groups: group._id } },
@@ -180,17 +178,28 @@ export const respondToInvitation = async ({
       );
     }
 
+    // Mark the GROUP_INVITE notification as read
+    await Notification.updateMany(
+      {
+        userId: requestingUserId,
+        type: "GROUP_INVITE",
+        "metadata.invitationId": invitationId.toString(),
+      },
+      { $set: { isRead: true } },
+      { session },
+    );
+
     await session.commitTransaction();
     return { accepted: accept };
-  } catch (error) {
+  } catch (e) {
     await session.abortTransaction();
-    throw error;
+    throw e;
   } finally {
     session.endSession();
   }
 };
 
-// ─── CANCEL INVITATION (by admin) ────────────────────────────────────────────
+// ─── CANCEL INVITATION ────────────────────────────────────────────────────────
 
 export const cancelInvitation = async ({
   invitationId,
