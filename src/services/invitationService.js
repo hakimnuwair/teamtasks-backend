@@ -1,9 +1,8 @@
 /**
  * services/invitationService.js
  *
- * Fix: notification metadata.invitationId is now stored as a plain string,
- * not a Mongoose ObjectId. This ensures frontend can read it from
- * notification.metadata.invitationId without type coercion.
+ * All array inserts within sessions use { ordered: true } — required by MongoDB.
+ * invitationId stored as plain string in notification metadata (not ObjectId).
  */
 
 import mongoose from "mongoose";
@@ -12,8 +11,6 @@ import Group from "../models/Group.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import { createLog } from "./activityLogService.js";
-
-// ─── SEND INVITATION ──────────────────────────────────────────────────────────
 
 export const sendInvitation = async ({
   groupId,
@@ -29,7 +26,6 @@ export const sendInvitation = async ({
       session,
     );
     if (!group) throw new Error("Group not found");
-
     const requester = group.members.find(
       (m) => m.userId.toString() === requestingUserId.toString(),
     );
@@ -55,6 +51,7 @@ export const sendInvitation = async ({
     if (existing)
       throw new Error("A pending invitation already exists for this user");
 
+    // ordered: true required for session + array insert
     const [invitation] = await GroupInvitation.create(
       [
         {
@@ -64,10 +61,10 @@ export const sendInvitation = async ({
           role,
         },
       ],
-      { session },
+      { session, ordered: true },
     );
 
-    // Store invitationId as STRING — critical for frontend to read from metadata
+    // Store invitationId as STRING for frontend metadata reads
     await Notification.create(
       [
         {
@@ -78,7 +75,7 @@ export const sendInvitation = async ({
           metadata: { invitationId: invitation._id.toString() },
         },
       ],
-      { session },
+      { session, ordered: true },
     );
 
     await createLog(
@@ -102,8 +99,6 @@ export const sendInvitation = async ({
   }
 };
 
-// ─── GET MY PENDING INVITATIONS ───────────────────────────────────────────────
-
 export const getMyInvitations = async (userId) => {
   return GroupInvitation.find({
     invitedUser: userId,
@@ -114,8 +109,6 @@ export const getMyInvitations = async (userId) => {
     .populate("invitedBy", "name email")
     .lean();
 };
-
-// ─── RESPOND TO INVITATION ────────────────────────────────────────────────────
 
 export const respondToInvitation = async ({
   invitationId,
@@ -131,7 +124,6 @@ export const respondToInvitation = async ({
       invitedUser: requestingUserId,
       status: "PENDING",
     }).session(session);
-
     if (!invitation)
       throw new Error("Invitation not found or already responded");
     if (invitation.expiresAt < new Date())
@@ -143,7 +135,6 @@ export const respondToInvitation = async ({
     if (accept) {
       const group = await Group.findById(invitation.groupId).session(session);
       if (!group || !group.isActive) throw new Error("Group no longer exists");
-
       const alreadyMember = group.members.some(
         (m) => m.userId.toString() === requestingUserId.toString(),
       );
@@ -156,7 +147,6 @@ export const respondToInvitation = async ({
           { session },
         );
       }
-
       await createLog(
         {
           userId: requestingUserId,
@@ -178,7 +168,6 @@ export const respondToInvitation = async ({
       );
     }
 
-    // Mark the GROUP_INVITE notification as read
     await Notification.updateMany(
       {
         userId: requestingUserId,
@@ -199,8 +188,6 @@ export const respondToInvitation = async ({
   }
 };
 
-// ─── CANCEL INVITATION ────────────────────────────────────────────────────────
-
 export const cancelInvitation = async ({
   invitationId,
   requestingUserId,
@@ -210,17 +197,14 @@ export const cancelInvitation = async ({
     await GroupInvitation.findById(invitationId).populate("groupId");
   if (!invitation || invitation.status !== "PENDING")
     throw new Error("Invitation not found or already resolved");
-
   const group = invitation.groupId;
   const isAdmin = group.members.some(
     (m) =>
       m.userId.toString() === requestingUserId.toString() && m.role === "ADMIN",
   );
   if (!isAdmin) throw new Error("Only group admins can cancel invitations");
-
   invitation.status = "CANCELLED";
   await invitation.save();
-
   await createLog({
     userId: requestingUserId,
     groupId: group._id,
@@ -228,6 +212,5 @@ export const cancelInvitation = async ({
     metadata: { invitationId },
     ipAddress,
   });
-
   return { message: "Invitation cancelled" };
 };

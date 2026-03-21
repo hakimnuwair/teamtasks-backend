@@ -14,7 +14,7 @@ router.patch(
   zodValidation(markNotificationsReadSchema),
   notificationController.markAsRead,
 );
-router.post("/read-all", notificationController.markAllAsRead);
+router.patch("/read-all", notificationController.markAllAsRead);
 router.delete("/:id", notificationController.deleteNotification);
 
 export default router;

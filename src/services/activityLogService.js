@@ -102,6 +102,7 @@ export const getGroupLogs = async ({ groupId, page = 1, limit = 20 }) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
+      .populate("groupId", "name")
       .populate("userId", "name email")
       .populate("reminderId", "title")
       .lean(),

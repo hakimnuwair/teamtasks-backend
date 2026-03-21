@@ -1,8 +1,10 @@
 /**
- * routes/userRoutes.js — COMPLETE REPLACEMENT
- * Place at: routes/userRoutes.js
+ * routes/userRoutes.js
  *
- * Added: GET /search, GET /:id, PATCH /:id
+ * ROUTE ORDER MATTERS:
+ *   /search must be registered before /:id — otherwise Express matches
+ *   the string "search" as the :id param and the request hits getUserById,
+ *   which tries to cast "search" as a MongoDB ObjectId and throws a 400.
  */
 
 import express from "express";
@@ -13,8 +15,11 @@ const router = express.Router();
 
 router.use(protect);
 
+// Static routes first
 router.get("/search", userController.searchUsers);
 router.get("/", userController.getAllUsers);
+
+// Dynamic :id routes last
 router.get("/:id", userController.getUserById);
 router.patch("/:id", userController.updateUser);
 

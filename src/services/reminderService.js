@@ -1,15 +1,12 @@
 /**
  * services/reminderService.js
  *
- * Per-user completion model:
- *   - completeReminder() adds an entry to userCompletions[] for the requesting user.
- *   - If ALL assignedUsers have completed, the top-level status becomes "COMPLETED".
- *   - For personal reminders (no groupId), behavior is unchanged.
+ * Per-user completion: completeReminder() adds to userCompletions[].
+ * Group reminder becomes COMPLETED only when ALL assigned users complete.
+ * Personal reminders complete globally as before.
  *
- * Assignment resolution (resolveAssignedUsers):
- *   - groupId + assignedUsers=[] → resolve to ALL current group members.
- *   - groupId + assignedUsers=[...ids] → validate they are group members, use as-is.
- *   - no groupId → [creatorId].
+ * All array inserts with sessions use { ordered: true } — required by MongoDB
+ * when using sessions with multi-document inserts.
  */
 
 import mongoose from "mongoose";
@@ -18,8 +15,6 @@ import Group from "../models/Group.js";
 import Notification from "../models/Notification.js";
 import { createLog } from "./activityLogService.js";
 
-// ─── Resolve assignedUsers ────────────────────────────────────────────────────
-
 const resolveAssignedUsers = async (
   groupId,
   assignedUsers,
@@ -27,28 +22,21 @@ const resolveAssignedUsers = async (
   session,
 ) => {
   if (!groupId) return [creatorId];
-
   const group = await Group.findOne({ _id: groupId, isActive: true }).session(
     session,
   );
   if (!group) throw new Error("Group not found");
-
   const memberIds = group.members.map((m) => m.userId.toString());
-
   if (assignedUsers && assignedUsers.length > 0) {
     const invalid = assignedUsers.filter(
       (id) => !memberIds.includes(id.toString()),
     );
     if (invalid.length > 0)
-      throw new Error(`Some users are not members of this group`);
+      throw new Error("Some users are not members of this group");
     return assignedUsers;
   }
-
-  // Empty assignedUsers = all group members
   return group.members.map((m) => m.userId);
 };
-
-// ─── CREATE ───────────────────────────────────────────────────────────────────
 
 export const createReminder = async (
   {
@@ -73,6 +61,7 @@ export const createReminder = async (
       session,
     );
 
+    // ordered: true required for array inserts within a session
     const [reminder] = await Reminder.create(
       [
         {
@@ -87,10 +76,9 @@ export const createReminder = async (
           userCompletions: [],
         },
       ],
-      { session },
+      { session, ordered: true },
     );
 
-    // Notify assigned users (except creator)
     const toNotify = resolvedUsers.filter(
       (uid) => uid.toString() !== creatorId.toString(),
     );
@@ -103,7 +91,7 @@ export const createReminder = async (
           type: "REMINDER_ASSIGNED",
           message: `You have been assigned a reminder: "${title}"`,
         })),
-        { session },
+        { session, ordered: true },
       );
     }
 
@@ -129,8 +117,6 @@ export const createReminder = async (
   }
 };
 
-// ─── GET MY REMINDERS ─────────────────────────────────────────────────────────
-
 export const getMyReminders = async ({
   userId,
   status,
@@ -141,7 +127,6 @@ export const getMyReminders = async ({
   const filter = { assignedUsers: userId };
   if (status) filter.status = status;
   if (priority) filter.priority = priority;
-
   const skip = (page - 1) * limit;
   const [reminders, total] = await Promise.all([
     Reminder.find(filter)
@@ -159,8 +144,6 @@ export const getMyReminders = async ({
     pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
   };
 };
-
-// ─── GET GROUP REMINDERS ──────────────────────────────────────────────────────
 
 export const getGroupReminders = async ({
   groupId,
@@ -175,10 +158,8 @@ export const getGroupReminders = async ({
     "members.userId": requestingUserId,
   });
   if (!group) throw new Error("Group not found or access denied");
-
   const filter = { groupId };
   if (status) filter.status = status;
-
   const skip = (page - 1) * limit;
   const [reminders, total] = await Promise.all([
     Reminder.find(filter)
@@ -197,28 +178,21 @@ export const getGroupReminders = async ({
   };
 };
 
-// ─── GET BY ID ────────────────────────────────────────────────────────────────
-
 export const getReminderById = async ({ reminderId, requestingUserId }) => {
   const reminder = await Reminder.findById(reminderId)
     .populate("createdBy", "name email")
     .populate("assignedUsers", "name email")
     .populate("groupId", "name")
     .lean();
-
   if (!reminder) throw new Error("Reminder not found");
-
   const isAssigned = reminder.assignedUsers.some(
     (u) => u._id.toString() === requestingUserId.toString(),
   );
   const isCreator =
     reminder.createdBy._id.toString() === requestingUserId.toString();
   if (!isAssigned && !isCreator) throw new Error("Access denied");
-
   return reminder;
 };
-
-// ─── UPDATE ───────────────────────────────────────────────────────────────────
 
 export const updateReminder = async ({
   reminderId,
@@ -235,7 +209,6 @@ export const updateReminder = async ({
       throw new Error("Only the creator can update this reminder");
     if (reminder.status === "COMPLETED")
       throw new Error("Cannot update a completed reminder");
-
     if (updates.assignedUsers && reminder.groupId) {
       updates.assignedUsers = await resolveAssignedUsers(
         reminder.groupId,
@@ -244,10 +217,8 @@ export const updateReminder = async ({
         session,
       );
     }
-
     Object.assign(reminder, updates);
     await reminder.save({ session });
-
     await createLog(
       {
         userId: requestingUserId,
@@ -259,7 +230,6 @@ export const updateReminder = async ({
       },
       session,
     );
-
     await session.commitTransaction();
     return reminder;
   } catch (e) {
@@ -269,12 +239,6 @@ export const updateReminder = async ({
     session.endSession();
   }
 };
-
-// ─── COMPLETE ─────────────────────────────────────────────────────────────────
-// Per-user completion for group reminders.
-// For personal reminders: marks the reminder COMPLETED globally (old behaviour).
-// For group reminders: records completion for this user only.
-//   → top-level status becomes COMPLETED only when ALL assigned users complete.
 
 export const completeReminder = async ({
   reminderId,
@@ -286,7 +250,6 @@ export const completeReminder = async ({
   try {
     const reminder = await Reminder.findById(reminderId).session(session);
     if (!reminder) throw new Error("Reminder not found");
-
     const isAssigned = reminder.assignedUsers.some(
       (uid) => uid.toString() === requestingUserId.toString(),
     );
@@ -294,40 +257,33 @@ export const completeReminder = async ({
       reminder.createdBy.toString() === requestingUserId.toString();
     if (!isAssigned && !isCreator)
       throw new Error("You are not authorized to complete this reminder");
-
-    // Already completed by this user?
     const alreadyDone = reminder.userCompletions.some(
       (uc) => uc.userId.toString() === requestingUserId.toString(),
     );
     if (alreadyDone)
       throw new Error("You have already completed this reminder");
 
-    // Record per-user completion
     reminder.userCompletions.push({
       userId: requestingUserId,
       completedAt: new Date(),
     });
 
     if (!reminder.groupId) {
-      // Personal reminder — complete globally
       reminder.status = "COMPLETED";
       reminder.completedAt = new Date();
     } else {
-      // Group reminder — complete globally only if ALL assigned users are done
-      const completedUserIds = new Set(
+      const completedIds = new Set(
         reminder.userCompletions.map((uc) => uc.userId.toString()),
       );
-      const allDone = reminder.assignedUsers.every((uid) =>
-        completedUserIds.has(uid.toString()),
-      );
-      if (allDone) {
+      if (
+        reminder.assignedUsers.every((uid) => completedIds.has(uid.toString()))
+      ) {
         reminder.status = "COMPLETED";
         reminder.completedAt = new Date();
       }
     }
 
     await reminder.save({ session });
-
     await createLog(
       {
         userId: requestingUserId,
@@ -338,13 +294,12 @@ export const completeReminder = async ({
       },
       session,
     );
-
     await session.commitTransaction();
 
-    // Return populated
     return Reminder.findById(reminder._id)
       .populate("createdBy", "name email")
       .populate("assignedUsers", "name email")
+      .populate("userCompletions.userId", "name email")
       .populate("groupId", "name")
       .lean();
   } catch (e) {
@@ -354,8 +309,6 @@ export const completeReminder = async ({
     session.endSession();
   }
 };
-
-// ─── DELETE ───────────────────────────────────────────────────────────────────
 
 export const deleteReminder = async ({
   reminderId,
@@ -370,18 +323,15 @@ export const deleteReminder = async ({
     if (reminder.createdBy.toString() !== requestingUserId.toString())
       throw new Error("Only the creator can delete this reminder");
     if (reminder.isDeleted) throw new Error("Reminder is already deleted");
-
     reminder.isDeleted = true;
     reminder.deletedAt = new Date();
     reminder.deletedBy = requestingUserId;
     await reminder.save({ session });
-
     await Notification.updateMany(
       { reminderId: reminder._id },
       { $set: { isDeleted: true } },
       { session },
     );
-
     await createLog(
       {
         userId: requestingUserId,
@@ -393,7 +343,6 @@ export const deleteReminder = async ({
       },
       session,
     );
-
     await session.commitTransaction();
     return { message: "Reminder deleted successfully" };
   } catch (e) {
