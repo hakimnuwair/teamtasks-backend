@@ -15,10 +15,11 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import { initSocket } from "./server/socketManager.js";
+import { startReminderScheduler } from "./services/reminderScheduler.js";
 
 import { connectDB } from "./config/db.js";
 import passport, { initPassport } from "./config/passport.js";
-import { startReminderScheduler } from "./utils/startReminderScheduler.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 
 import authRoutes from "./routes/authRoutes.js";
@@ -41,9 +42,7 @@ const versionPrefix = process.env.versionPrefix || "/api/v1";
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 
 // ─── Socket.io ────────────────────────────────────────────────────────────────
-const io = new Server(httpServer, {
-  cors: { origin: CLIENT_URL, credentials: true },
-});
+const io = initSocket(httpServer);
 
 // Make io available to all controllers via req.app.get("io")
 app.set("io", io);
