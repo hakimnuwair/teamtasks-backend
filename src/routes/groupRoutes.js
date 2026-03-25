@@ -10,6 +10,7 @@ import {
 } from "../scehma/groupReminderSchema.js";
 import * as reminderController from "../controllers/reminderController.js";
 import { getGroupRemindersHandler } from "./reminderRoutes.js";
+import * as invitationService from "../services/invitationService.js";
 
 const router = express.Router();
 
@@ -42,6 +43,17 @@ router.patch(
 // Group reminders
 // GET /groups/:groupId/reminders is handled in groupRoutes via reminderController
 router.get("/:groupId/reminders", getGroupRemindersHandler);
+router.get("/:groupId/invitations", async (req, res, next) => {
+  try {
+    const invitations = await invitationService.getSentInvitationsForGroup({
+      groupId: req.params.groupId,
+      requestingUserId: req.user.id,
+    });
+    res.json({ success: true, data: invitations });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Group activity logs
 router.get("/:id/activity", groupController.getGroupActivityLogs);

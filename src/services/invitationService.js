@@ -110,6 +110,31 @@ export const getMyInvitations = async (userId) => {
     .lean();
 };
 
+// Add this new export to invitationService.js
+
+export const getSentInvitationsForGroup = async ({
+  groupId,
+  requestingUserId,
+}) => {
+  // Only admins of the group should see sent invitations
+  const group = await Group.findOne({ _id: groupId, isActive: true });
+  if (!group) throw new Error("Group not found");
+
+  const isAdmin = group.members.some(
+    (m) =>
+      m.userId.toString() === requestingUserId.toString() && m.role === "ADMIN",
+  );
+  if (!isAdmin) throw new Error("Only group admins can view sent invitations");
+
+  return GroupInvitation.find({
+    groupId,
+    status: { $in: ["PENDING", "DECLINED", "CANCELLED"] },
+  })
+    .populate("invitedUser", "name email")
+    .populate("invitedBy", "name email")
+    .lean();
+};
+
 export const respondToInvitation = async ({
   invitationId,
   requestingUserId,
