@@ -7,14 +7,6 @@ let transporter = null;
 const getTransporter = () => {
   if (transporter) return transporter;
 
-  console.log("[sendEmail] Config check:", {
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS ? "SET ✅" : "MISSING ❌",
-    clientUrl: process.env.CLIENT_URL,
-  });
-
   transporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST,
     port: Number(process.env.EMAIL_PORT),
@@ -41,12 +33,31 @@ export const sendPasswordResetEmail = async (toEmail, resetToken) => {
         <p>You requested a password reset.</p>
         <p>Click the link below to reset your password. It expires in <strong>1 hour</strong>.</p>
         <a href="${resetUrl}">${resetUrl}</a>
-        <p>If you didn't request this, ignore this email.</p>
+
+        <hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;" />
+        <p style="margin: 0 0 6px; font-size: 13px; color: #64748b;">
+          Can't click the link? Copy and paste this token into the reset form:
+        </p>
+        <code style="
+          display: inline-block;
+          padding: 10px 16px;
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          font-size: 13px;
+          letter-spacing: 0.5px;
+          color: #0f172a;
+          word-break: break-all;
+        ">${resetToken}</code>
+
+        <p style="margin-top: 20px; font-size: 12px; color: #94a3b8;">
+          If you didn't request this, ignore this email.
+        </p>
       `,
     });
-    console.log("[sendEmail] Sent ✅ messageId:", info.messageId);
+    console.log("[sendEmail] Sent messageId:", info.messageId);
   } catch (err) {
-    console.error("[sendEmail] Failed ❌:", err.message);
+    console.error("[sendEmail] Failed :", err.message);
     throw err;
   }
 };

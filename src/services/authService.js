@@ -135,7 +135,7 @@ export const requestPasswordReset = async (email) => {
   const isDev = process.env.NODE_ENV !== "production";
   return {
     message: "If that email is registered, a reset link has been sent.",
-    ...(isDev && { resetToken: plainToken, expiresIn: "1 hour" }),
+    // ...(isDev && { resetToken: plainToken, expiresIn: "1 hour" }),
   };
 };
 
