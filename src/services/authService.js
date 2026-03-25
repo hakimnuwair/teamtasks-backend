@@ -22,6 +22,7 @@ import {
   generateRefreshToken,
 } from "../utils/generateToken.js";
 import jwt from "jsonwebtoken";
+import { sendPasswordResetEmail } from "../utils/sendEmail.js";
 
 // ─── Register ─────────────────────────────────────────────────────────────────
 
@@ -106,43 +107,34 @@ export const getCurrentUserDetails = async (user) => {
 
 export const requestPasswordReset = async (email) => {
   const user = await User.findOne({ email, status: "ACTIVE" });
-
-  // Always return success message — never reveal whether email exists
   if (!user) {
     return {
       message: "If that email is registered, a reset link has been sent.",
     };
   }
 
-  // Google OAuth users have no password to reset
   if (user.googleId && (!user.password || user.password.startsWith("oauth_"))) {
     return {
       message: "This account uses Google sign-in. Please sign in with Google.",
     };
   }
 
-  // Generate a cryptographically random 32-byte token
   const plainToken = crypto.randomBytes(32).toString("hex");
-
-  // Store the SHA-256 hash (never store the plain token)
   const hashedToken = crypto
     .createHash("sha256")
     .update(plainToken)
     .digest("hex");
 
   user.resetPasswordToken = hashedToken;
-  user.resetPasswordExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+  user.resetPasswordExpiry = new Date(Date.now() + 60 * 60 * 1000);
   await user.save({ validateBeforeSave: false });
 
-  // In production: send plainToken via email (see email setup notes in README)
-  // In development: return token in response for easy testing
+  // ✅ Actually send the email now
+  await sendPasswordResetEmail(email, plainToken);
+
   const isDev = process.env.NODE_ENV !== "production";
-
-  console.log(`[Auth] Password reset token for ${email}:`, plainToken);
-
   return {
     message: "If that email is registered, a reset link has been sent.",
-    // Only expose token in development — remove this in production
     ...(isDev && { resetToken: plainToken, expiresIn: "1 hour" }),
   };
 };

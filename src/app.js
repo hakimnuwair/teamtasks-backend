@@ -6,7 +6,6 @@
  *   hoisted, so env vars are not available inside imported modules at load
  *   time. initPassport() is called explicitly here, after dotenv runs.
  */
-
 import express from "express";
 import dotenv from "dotenv";
 import { createServer } from "http";
