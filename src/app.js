@@ -28,6 +28,7 @@ import reminderRoutes from "./routes/reminderRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import invitationRoutes from "./routes/invitationRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 
 // ─── MUST be first — before any env var is read ───────────────────────────────
 dotenv.config();
@@ -104,6 +105,7 @@ app.use(`${versionPrefix}/invitations`, invitationRoutes);
 app.use(`${versionPrefix}/reminders`, reminderRoutes);
 app.use(`${versionPrefix}/notifications`, notificationRoutes);
 app.use(`${versionPrefix}/activity`, activityRoutes);
+app.use(`${versionPrefix}/ai`, aiRoutes);
 
 app.get("/health", (_req, res) =>
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() }),
