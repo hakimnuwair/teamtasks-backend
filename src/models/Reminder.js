@@ -42,6 +42,16 @@ const reminderSchema = new mongoose.Schema(
       ref: "Group",
       default: null,
     },
+    parentReminder: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Reminder",
+      default: null,
+    },
+    sortOrder: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -84,6 +94,7 @@ reminderSchema.index({ groupId: 1 });
 reminderSchema.index({ createdBy: 1 });
 reminderSchema.index({ dueDateTime: 1, status: 1, notificationSent: 1 });
 reminderSchema.index({ "userCompletions.userId": 1 });
+reminderSchema.index({ parentReminder: 1 });
 
 // Personal reminder uniqueness
 reminderSchema.index(
