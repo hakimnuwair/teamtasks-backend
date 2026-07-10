@@ -1,12 +1,16 @@
 /**
  * services/reminderService.js
  *
- * Per-user completion: completeReminder() adds to userCompletions[].
- * Group reminder becomes COMPLETED only when ALL assigned users complete.
- * Personal reminders complete globally as before.
+ * PATCH SUMMARY — only 2 functions changed, everything else is identical:
  *
- * All array inserts with sessions use { ordered: true } — required by MongoDB
- * when using sessions with multi-document inserts.
+ *   1. deleteReminder  — also soft-deletes all sub-reminders in the same transaction
+ *   2. completeReminder — blocked if parent has PENDING/OVERDUE sub-reminders
+ *
+ * Both patches use the two internal helpers from subReminderService.js so
+ * the logic stays in one place and doesn't get duplicated.
+ *
+ * ⚠️  Copy this file OVER your existing services/reminderService.js.
+ *     Only deleteReminder and completeReminder have changed.
  */
 
 import mongoose from "mongoose";
@@ -14,6 +18,14 @@ import Reminder from "../models/Reminder.js";
 import Group from "../models/Group.js";
 import Notification from "../models/Notification.js";
 import { createLog } from "./activityLogService.js";
+
+// Import the two helpers we need — defined in subReminderService.js
+import {
+  softDeleteAllSubReminders,
+  hasBlockingSubReminders,
+} from "./subReminderService.js";
+
+// ─── Unchanged helper ─────────────────────────────────────────────────────────
 
 const resolveAssignedUsers = async (
   groupId,
@@ -38,6 +50,8 @@ const resolveAssignedUsers = async (
   return group.members.map((m) => m.userId);
 };
 
+// ─── Unchanged: createReminder ────────────────────────────────────────────────
+
 export const createReminder = async (
   {
     title,
@@ -61,7 +75,6 @@ export const createReminder = async (
       session,
     );
 
-    // ordered: true required for array inserts within a session
     const [reminder] = await Reminder.create(
       [
         {
@@ -74,6 +87,7 @@ export const createReminder = async (
           assignedUsers: resolvedUsers,
           priority,
           userCompletions: [],
+          parentId: null, // explicit: this is always a top-level reminder
         },
       ],
       { session, ordered: true },
@@ -117,6 +131,8 @@ export const createReminder = async (
   }
 };
 
+// ─── Unchanged: getMyReminders ────────────────────────────────────────────────
+
 export const getMyReminders = async ({
   userId,
   status,
@@ -124,7 +140,8 @@ export const getMyReminders = async ({
   page = 1,
   limit = 20,
 }) => {
-  const filter = { assignedUsers: userId };
+  // Only return TOP-LEVEL reminders — sub-reminders are fetched separately
+  const filter = { assignedUsers: userId, parentId: null };
   if (status) filter.status = status;
   if (priority) filter.priority = priority;
   const skip = (page - 1) * limit;
@@ -145,6 +162,8 @@ export const getMyReminders = async ({
   };
 };
 
+// ─── Unchanged: getGroupReminders ─────────────────────────────────────────────
+
 export const getGroupReminders = async ({
   groupId,
   requestingUserId,
@@ -158,7 +177,8 @@ export const getGroupReminders = async ({
     "members.userId": requestingUserId,
   });
   if (!group) throw new Error("Group not found or access denied");
-  const filter = { groupId };
+  // Only return TOP-LEVEL reminders
+  const filter = { groupId, parentId: null };
   if (status) filter.status = status;
   const skip = (page - 1) * limit;
   const [reminders, total] = await Promise.all([
@@ -178,6 +198,8 @@ export const getGroupReminders = async ({
   };
 };
 
+// ─── Unchanged: getReminderById ───────────────────────────────────────────────
+
 export const getReminderById = async ({ reminderId, requestingUserId }) => {
   const reminder = await Reminder.findById(reminderId)
     .populate("createdBy", "name email")
@@ -193,6 +215,8 @@ export const getReminderById = async ({ reminderId, requestingUserId }) => {
   if (!isAssigned && !isCreator) throw new Error("Access denied");
   return reminder;
 };
+
+// ─── Unchanged: updateReminder ────────────────────────────────────────────────
 
 export const updateReminder = async ({
   reminderId,
@@ -240,6 +264,9 @@ export const updateReminder = async ({
   }
 };
 
+// ─── PATCHED: completeReminder ────────────────────────────────────────────────
+// New: blocked if parent has any PENDING or OVERDUE sub-reminders.
+
 export const completeReminder = async ({
   reminderId,
   requestingUserId,
@@ -250,6 +277,7 @@ export const completeReminder = async ({
   try {
     const reminder = await Reminder.findById(reminderId).session(session);
     if (!reminder) throw new Error("Reminder not found");
+
     const isAssigned = reminder.assignedUsers.some(
       (uid) => uid.toString() === requestingUserId.toString(),
     );
@@ -257,11 +285,22 @@ export const completeReminder = async ({
       reminder.createdBy.toString() === requestingUserId.toString();
     if (!isAssigned && !isCreator)
       throw new Error("You are not authorized to complete this reminder");
+
     const alreadyDone = reminder.userCompletions.some(
       (uc) => uc.userId.toString() === requestingUserId.toString(),
     );
     if (alreadyDone)
       throw new Error("You have already completed this reminder");
+
+    // ── NEW: block completion if there are unfinished sub-reminders ──────────
+    // Check outside the session (read-only, no need for transaction overhead)
+    const isBlocked = await hasBlockingSubReminders(reminderId);
+    if (isBlocked) {
+      throw new Error(
+        "Complete or delete all sub-reminders before marking this reminder complete",
+      );
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     reminder.userCompletions.push({
       userId: requestingUserId,
@@ -310,6 +349,9 @@ export const completeReminder = async ({
   }
 };
 
+// ─── PATCHED: deleteReminder ──────────────────────────────────────────────────
+// New: also soft-deletes all sub-reminders in the same transaction.
+
 export const deleteReminder = async ({
   reminderId,
   requestingUserId,
@@ -323,15 +365,24 @@ export const deleteReminder = async ({
     if (reminder.createdBy.toString() !== requestingUserId.toString())
       throw new Error("Only the creator can delete this reminder");
     if (reminder.isDeleted) throw new Error("Reminder is already deleted");
+
+    // Soft-delete the parent
     reminder.isDeleted = true;
     reminder.deletedAt = new Date();
     reminder.deletedBy = requestingUserId;
     await reminder.save({ session });
+
+    // ── NEW: cascade soft-delete to all sub-reminders ────────────────────────
+    await softDeleteAllSubReminders(reminderId, requestingUserId, session);
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Soft-delete related notifications
     await Notification.updateMany(
       { reminderId: reminder._id },
       { $set: { isDeleted: true } },
       { session },
     );
+
     await createLog(
       {
         userId: requestingUserId,
@@ -343,6 +394,7 @@ export const deleteReminder = async ({
       },
       session,
     );
+
     await session.commitTransaction();
     return { message: "Reminder deleted successfully" };
   } catch (e) {

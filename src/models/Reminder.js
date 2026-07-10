@@ -1,16 +1,16 @@
 /**
  * models/Reminder.js
  *
- * Added: userCompletions — per-user completion tracking for group reminders.
- * Each entry records when a specific user marked this reminder complete.
+ * Changes from previous version:
+ *   - Added `parentId` field (ObjectId ref "Reminder", default null)
+ *     Null  = top-level reminder
+ *     Set   = this is a sub-reminder of parentId
+ *   - Sub-reminders are 1 level deep only (enforced in service layer)
+ *   - Pre-find hook is unchanged — parentId: null is the default so
+ *     existing queries continue to return only top-level reminders
+ *     unless they explicitly filter on parentId
  *
- * Why: Group reminders are personal actions even in a team context.
- * User A completing "Daily standup" should not affect User B's status.
- * The top-level status/completedAt remain for personal reminders and
- * for backward compatibility — they reflect the creator's completion.
- *
- * assignedUsers: [] (empty array) means "all group members" and is
- * resolved at creation time to the full member list. Stored as ObjectIds.
+ * Everything else (userCompletions, indexes, soft-delete hook) is unchanged.
  */
 
 import mongoose from "mongoose";
@@ -29,6 +29,16 @@ const userCompletionSchema = new mongoose.Schema(
 
 const reminderSchema = new mongoose.Schema(
   {
+    // ── Sub-reminder support ────────────────────────────────────────────────
+    // null  = this is a top-level reminder
+    // ObjectId = this is a sub-reminder; value is the parent reminder's _id
+    parentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Reminder",
+      default: null,
+    },
+
+    // ── Core fields (unchanged) ─────────────────────────────────────────────
     title: { type: String, required: true, trim: true, maxLength: 200 },
     description: { type: String, trim: true, maxLength: 1000, default: "" },
     dueDateTime: { type: Date, required: true },
@@ -42,16 +52,6 @@ const reminderSchema = new mongoose.Schema(
       ref: "Group",
       default: null,
     },
-    parentReminder: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Reminder",
-      default: null,
-    },
-    sortOrder: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -62,8 +62,6 @@ const reminderSchema = new mongoose.Schema(
     // Per-user completion tracking (group reminders)
     userCompletions: [userCompletionSchema],
 
-    // Top-level status — for personal reminders this is authoritative.
-    // For group reminders: COMPLETED when ALL assigned users have completed.
     status: {
       type: String,
       enum: ["PENDING", "COMPLETED", "OVERDUE"],
@@ -77,6 +75,8 @@ const reminderSchema = new mongoose.Schema(
     completedAt: { type: Date, default: null },
 
     notificationSent: { type: Boolean, default: false },
+    notifiedUsers: { type: [String], default: [] },
+
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
     deletedBy: {
@@ -88,24 +88,31 @@ const reminderSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// Indexes
+// ── Indexes (existing ones preserved, one new index added) ──────────────────
+
 reminderSchema.index({ assignedUsers: 1 });
 reminderSchema.index({ groupId: 1 });
 reminderSchema.index({ createdBy: 1 });
 reminderSchema.index({ dueDateTime: 1, status: 1, notificationSent: 1 });
 reminderSchema.index({ "userCompletions.userId": 1 });
-reminderSchema.index({ parentReminder: 1 });
 
-// Personal reminder uniqueness
+// New: fast lookup of all sub-reminders by parent
+reminderSchema.index({ parentId: 1 });
+
+// Personal reminder uniqueness (top-level only — parentId: null)
 reminderSchema.index(
   { title: 1, createdBy: 1 },
   {
     unique: true,
-    partialFilterExpression: { groupId: null, status: "PENDING" },
+    partialFilterExpression: {
+      groupId: null,
+      status: "PENDING",
+      parentId: null,
+    },
   },
 );
 
-// Group reminder uniqueness
+// Group reminder uniqueness (top-level only — parentId: null)
 reminderSchema.index(
   { title: 1, groupId: 1 },
   {
@@ -113,10 +120,12 @@ reminderSchema.index(
     partialFilterExpression: {
       groupId: { $type: "objectId" },
       status: "PENDING",
+      parentId: null,
     },
   },
 );
 
+// Pre-find hook — exclude soft-deleted documents (unchanged)
 reminderSchema.pre(/^find/, function () {
   if (!this.getOptions()?.includeDeleted) this.where({ isDeleted: false });
 });

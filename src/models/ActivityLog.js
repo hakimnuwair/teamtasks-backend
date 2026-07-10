@@ -1,3 +1,7 @@
+/**
+ * models/ActivityLog.js
+ */
+
 import mongoose from "mongoose";
 
 const activityLogSchema = new mongoose.Schema(
@@ -40,11 +44,15 @@ const activityLogSchema = new mongoose.Schema(
         "REMINDER_DELETED",
         "REMINDER_COMPLETED",
         "REMINDER_OVERDUE",
+
+        // Sub-reminder actions (NEW)
+        "SUBREMINDER_CREATED",
+        "SUBREMINDER_DELETED",
       ],
       required: true,
     },
     metadata: {
-      type: mongoose.Schema.Types.Mixed, // Extra context (e.g., old vs new value)
+      type: mongoose.Schema.Types.Mixed,
       default: {},
     },
     ipAddress: {
@@ -55,7 +63,6 @@ const activityLogSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// Indexes
 activityLogSchema.index({ userId: 1, createdAt: -1 });
 activityLogSchema.index({ groupId: 1, createdAt: -1 });
 activityLogSchema.index({ reminderId: 1 });
