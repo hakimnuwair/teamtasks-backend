@@ -17,6 +17,11 @@
  *      (parent already notified assignees; sub-tasks are granular breakdowns).
  *   7. Sub-reminders DO participate in the scheduler — if their dueDateTime
  *      passes, they go OVERDUE independently.
+ *   8. Sub-reminders are the parent reminder's execution plan. Only the parent's
+ *      creator owns that plan: createSubReminder/deleteSubReminder are
+ *      creator-only. Assigned (non-creator) users execute the plan: they may
+ *      view it (getSubReminders) and complete items (completeSubReminder), but
+ *      not create or delete them.
  */
 
 import mongoose from "mongoose";
@@ -55,13 +60,11 @@ export const createSubReminder = async (
       throw new Error("Cannot add sub-reminders to a completed reminder");
     }
 
-    // 2. Only the parent's creator or an assigned user may add sub-reminders
+    // 2. Only the parent's creator plans the execution — creating a sub-reminder
+    //    is a planning action, so assigned (non-creator) users may not do it.
     const isCreator = parent.createdBy.toString() === creatorId.toString();
-    const isAssigned = parent.assignedUsers.some(
-      (uid) => uid.toString() === creatorId.toString(),
-    );
-    if (!isCreator && !isAssigned) {
-      throw new Error("You do not have access to this reminder");
+    if (!isCreator) {
+      throw new Error("Only the reminder creator can add sub-reminders");
     }
 
     // 3. Create the sub-reminder — inherit group context from parent
@@ -140,17 +143,17 @@ export const deleteSubReminder = async (
   session.startTransaction();
 
   try {
-    // 1. Validate parent exists and requester has access
+    // 1. Validate parent exists and requester owns the plan
     const parent = await Reminder.findById(parentId).session(session);
     if (!parent) throw new Error("Parent reminder not found");
     if (parent.isDeleted) throw new Error("Parent reminder has been deleted");
 
+    // Deleting a sub-reminder is a planning action — creator-only, same as create.
     const isCreator =
       parent.createdBy.toString() === requestingUserId.toString();
-    const isAssigned = parent.assignedUsers.some(
-      (uid) => uid.toString() === requestingUserId.toString(),
-    );
-    if (!isCreator && !isAssigned) throw new Error("Access denied");
+    if (!isCreator) {
+      throw new Error("Only the reminder creator can delete sub-reminders");
+    }
 
     // 2. Load the sub-reminder and verify it belongs to this parent
     const sub = await Reminder.findOne({
