@@ -49,10 +49,10 @@ export const improveTask = async ({ task }) => {
   }
 };
 
-// ─── Generate subtask suggestions ─────────────────────────────────────────────
+// ─── Generate sub-task suggestions ─────────────────────────────────────────────
 // Structured (JSON-schema-constrained) output — asks for a relative
 // "dueOffsetDays" per item rather than an absolute date, since models are
-// unreliable at absolute date arithmetic. The caller (subReminderService)
+// unreliable at absolute date arithmetic. The caller (subTaskService)
 // turns the offset into a real date and re-validates every field — this
 // function only talks to Gemini and returns the parsed-but-unvalidated array.
 
@@ -87,11 +87,11 @@ Task description: ${description || "(no description provided)"}
 Task priority: ${priority}
 Days remaining until the task is due: ${daysRemaining}`;
 
-export const generateSubtasks = async ({ reminder }) => {
+export const generateSubTasks = async ({ task }) => {
   const daysRemaining = Math.max(
     1,
     Math.ceil(
-      (new Date(reminder.dueDateTime).getTime() - Date.now()) /
+      (new Date(task.dueDateTime).getTime() - Date.now()) /
         (24 * 60 * 60 * 1000),
     ),
   );
@@ -101,9 +101,9 @@ export const generateSubtasks = async ({ reminder }) => {
     const response = await ai.models.generateContent({
       model: getGeminiModel(),
       contents: SUBTASK_PROMPT({
-        title: reminder.title,
-        description: reminder.description,
-        priority: reminder.priority,
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
         daysRemaining,
       }),
       config: {
@@ -113,16 +113,16 @@ export const generateSubtasks = async ({ reminder }) => {
     });
 
     const raw = response.text?.trim();
-    if (!raw) throw new Error("Failed to generate subtasks");
+    if (!raw) throw new Error("Failed to generate sub-tasks");
 
     let parsed;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      throw new Error("Failed to generate subtasks");
+      throw new Error("Failed to generate sub-tasks");
     }
     if (!Array.isArray(parsed) || parsed.length === 0) {
-      throw new Error("Failed to generate subtasks");
+      throw new Error("Failed to generate sub-tasks");
     }
 
     return parsed;
@@ -132,11 +132,11 @@ export const generateSubtasks = async ({ reminder }) => {
       throw error;
     }
 
-    if (error.message === "Failed to generate subtasks") {
+    if (error.message === "Failed to generate sub-tasks") {
       throw error;
     }
 
-    console.error("[Gemini] generateSubtasks failed:", error);
+    console.error("[Gemini] generateSubTasks failed:", error);
     throw new Error("AI service is temporarily unavailable");
   }
 };

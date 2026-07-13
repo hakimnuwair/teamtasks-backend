@@ -39,9 +39,9 @@ export const changeMemberRoleSchema = z.object({
   }),
 });
 
-// ─── REMINDER SCHEMAS ─────────────────────────────────────────────────────────
+// ─── TASK SCHEMAS ─────────────────────────────────────────────────────────────
 
-export const createReminderSchema = z.object({
+export const createTaskSchema = z.object({
   body: z.object({
     title: z
       .string({ required_error: "Title is required" })
@@ -70,7 +70,7 @@ export const createReminderSchema = z.object({
   }),
 });
 
-export const updateReminderSchema = z.object({
+export const updateTaskSchema = z.object({
   body: z.object({
     title: z.string().trim().min(1).max(200).optional(),
 

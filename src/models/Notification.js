@@ -7,9 +7,9 @@ const notificationSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    reminderId: {
+    taskId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Reminder",
+      ref: "Task",
       default: null,
     },
     groupId: {
@@ -19,8 +19,8 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["REMINDER_DUE", "GROUP_INVITE", "REMINDER_ASSIGNED", "SYSTEM"],
-      default: "REMINDER_DUE",
+      enum: ["TASK_DUE", "GROUP_INVITE", "TASK_ASSIGNED", "SYSTEM"],
+      default: "TASK_DUE",
     },
     message: {
       type: String,

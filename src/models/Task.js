@@ -1,16 +1,10 @@
 /**
- * models/Reminder.js
+ * models/Task.js
  *
- * Changes from previous version:
- *   - Added `parentId` field (ObjectId ref "Reminder", default null)
- *     Null  = top-level reminder
- *     Set   = this is a sub-reminder of parentId
- *   - Sub-reminders are 1 level deep only (enforced in service layer)
- *   - Pre-find hook is unchanged — parentId: null is the default so
- *     existing queries continue to return only top-level reminders
- *     unless they explicitly filter on parentId
- *
- * Everything else (userCompletions, indexes, soft-delete hook) is unchanged.
+ * Tasks support a self-referencing `parentId` (ObjectId ref "Task", default null):
+ *   Null  = top-level task
+ *   Set   = this is a sub-task of parentId
+ * Sub-tasks are 1 level deep only (enforced in the service layer, not here).
  */
 
 import mongoose from "mongoose";
@@ -27,18 +21,18 @@ const userCompletionSchema = new mongoose.Schema(
   { _id: false },
 );
 
-const reminderSchema = new mongoose.Schema(
+const taskSchema = new mongoose.Schema(
   {
-    // ── Sub-reminder support ────────────────────────────────────────────────
-    // null  = this is a top-level reminder
-    // ObjectId = this is a sub-reminder; value is the parent reminder's _id
+    // ── Sub-task support ─────────────────────────────────────────────────────
+    // null  = this is a top-level task
+    // ObjectId = this is a sub-task; value is the parent task's _id
     parentId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Reminder",
+      ref: "Task",
       default: null,
     },
 
-    // ── Core fields (unchanged) ─────────────────────────────────────────────
+    // ── Core fields ──────────────────────────────────────────────────────────
     title: { type: String, required: true, trim: true, maxLength: 200 },
     description: { type: String, trim: true, maxLength: 1000, default: "" },
     dueDateTime: { type: Date, required: true },
@@ -59,7 +53,7 @@ const reminderSchema = new mongoose.Schema(
     },
     assignedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
-    // Per-user completion tracking (group reminders)
+    // Per-user completion tracking (group tasks)
     userCompletions: [userCompletionSchema],
 
     status: {
@@ -88,19 +82,19 @@ const reminderSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// ── Indexes (existing ones preserved, one new index added) ──────────────────
+// ── Indexes ───────────────────────────────────────────────────────────────────
 
-reminderSchema.index({ assignedUsers: 1 });
-reminderSchema.index({ groupId: 1 });
-reminderSchema.index({ createdBy: 1 });
-reminderSchema.index({ dueDateTime: 1, status: 1, notificationSent: 1 });
-reminderSchema.index({ "userCompletions.userId": 1 });
+taskSchema.index({ assignedUsers: 1 });
+taskSchema.index({ groupId: 1 });
+taskSchema.index({ createdBy: 1 });
+taskSchema.index({ dueDateTime: 1, status: 1, notificationSent: 1 });
+taskSchema.index({ "userCompletions.userId": 1 });
 
-// New: fast lookup of all sub-reminders by parent
-reminderSchema.index({ parentId: 1 });
+// Fast lookup of all sub-tasks by parent
+taskSchema.index({ parentId: 1 });
 
-// Personal reminder uniqueness (top-level only — parentId: null)
-reminderSchema.index(
+// Personal task uniqueness (top-level only — parentId: null)
+taskSchema.index(
   { title: 1, createdBy: 1 },
   {
     unique: true,
@@ -112,8 +106,8 @@ reminderSchema.index(
   },
 );
 
-// Group reminder uniqueness (top-level only — parentId: null)
-reminderSchema.index(
+// Group task uniqueness (top-level only — parentId: null)
+taskSchema.index(
   { title: 1, groupId: 1 },
   {
     unique: true,
@@ -125,10 +119,10 @@ reminderSchema.index(
   },
 );
 
-// Pre-find hook — exclude soft-deleted documents (unchanged)
-reminderSchema.pre(/^find/, function () {
+// Pre-find hook — exclude soft-deleted documents
+taskSchema.pre(/^find/, function () {
   if (!this.getOptions()?.includeDeleted) this.where({ isDeleted: false });
 });
 
-const Reminder = mongoose.model("Reminder", reminderSchema);
-export default Reminder;
+const Task = mongoose.model("Task", taskSchema);
+export default Task;

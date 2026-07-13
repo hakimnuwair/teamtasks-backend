@@ -1,5 +1,4 @@
 import ActivityLog from "../models/ActivityLog.js";
-import Reminder from "../models/Reminder.js";
 import User from "../models/User.js";
 
 const enrichMetadataUsers = async (logs) => {
@@ -46,16 +45,14 @@ export const createLog = async (
   {
     userId,
     groupId = null,
-    reminderId = null,
+    taskId = null,
     action,
     metadata = {},
     ipAddress = null,
   },
   session = null,
 ) => {
-  const logData = [
-    { userId, groupId, reminderId, action, metadata, ipAddress },
-  ];
+  const logData = [{ userId, groupId, taskId, action, metadata, ipAddress }];
 
   const options = session ? { session } : {};
   const [log] = await ActivityLog.create(logData, options);
@@ -76,7 +73,7 @@ export const getUserLogs = async ({ userId, page = 1, limit = 20 }) => {
       .limit(limit)
       .populate("userId", "name")
       .populate("groupId", "name")
-      .populate("reminderId", "title")
+      .populate("taskId", "title")
       .lean(),
     ActivityLog.countDocuments({ userId }),
   ]);
@@ -106,7 +103,7 @@ export const getGroupLogs = async ({ groupId, page = 1, limit = 20 }) => {
       .limit(limit)
       .populate("groupId", "name")
       .populate("userId", "name email")
-      .populate("reminderId", "title")
+      .populate("taskId", "title")
       .lean(),
     ActivityLog.countDocuments({ groupId }),
   ]);

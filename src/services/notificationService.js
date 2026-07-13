@@ -23,7 +23,7 @@ export const getUserNotifications = async ({
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate("reminderId", "title dueDateTime")
+      .populate("taskId", "title dueDateTime")
       .populate("groupId", "name")
       .lean(),
 

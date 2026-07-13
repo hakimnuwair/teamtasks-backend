@@ -2,7 +2,7 @@ import express from "express";
 import * as notificationController from "../controllers/notificationController.js";
 import zodValidation from "../middlewares/zodValidation.js";
 import { protect } from "../middlewares/authMiddelware.js";
-import { markNotificationsReadSchema } from "../scehma/groupReminderSchema.js";
+import { markNotificationsReadSchema } from "../scehma/groupTaskSchema.js";
 
 const router = express.Router();
 

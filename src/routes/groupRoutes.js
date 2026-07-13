@@ -7,9 +7,8 @@ import {
   updateGroupSchema,
   inviteMemberSchema,
   changeMemberRoleSchema,
-} from "../scehma/groupReminderSchema.js";
-import * as reminderController from "../controllers/reminderController.js";
-import { getGroupRemindersHandler } from "./reminderRoutes.js";
+} from "../scehma/groupTaskSchema.js";
+import { getGroupTasksHandler } from "./taskRoutes.js";
 import * as invitationService from "../services/invitationService.js";
 
 const router = express.Router();
@@ -40,9 +39,9 @@ router.patch(
   groupController.changeMemberRole,
 );
 
-// Group reminders
-// GET /groups/:groupId/reminders is handled in groupRoutes via reminderController
-router.get("/:groupId/reminders", getGroupRemindersHandler);
+// Group tasks
+// GET /groups/:groupId/tasks is handled in groupRoutes via taskController
+router.get("/:groupId/tasks", getGroupTasksHandler);
 router.get("/:groupId/invitations", async (req, res, next) => {
   try {
     const invitations = await invitationService.getSentInvitationsForGroup({

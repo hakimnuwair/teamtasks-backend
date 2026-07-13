@@ -16,9 +16,9 @@ const activityLogSchema = new mongoose.Schema(
       ref: "Group",
       default: null,
     },
-    reminderId: {
+    taskId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Reminder",
+      ref: "Task",
       default: null,
     },
     action: {
@@ -38,16 +38,16 @@ const activityLogSchema = new mongoose.Schema(
         "GROUP_INVITATION_DECLINED",
         "GROUP_INVITATION_CANCELLED",
 
-        // Reminder actions
-        "REMINDER_CREATED",
-        "REMINDER_UPDATED",
-        "REMINDER_DELETED",
-        "REMINDER_COMPLETED",
-        "REMINDER_OVERDUE",
+        // Task actions
+        "TASK_CREATED",
+        "TASK_UPDATED",
+        "TASK_DELETED",
+        "TASK_COMPLETED",
+        "TASK_OVERDUE",
 
-        // Sub-reminder actions (NEW)
-        "SUBREMINDER_CREATED",
-        "SUBREMINDER_DELETED",
+        // Sub-task actions
+        "SUBTASK_CREATED",
+        "SUBTASK_DELETED",
       ],
       required: true,
     },
@@ -65,7 +65,7 @@ const activityLogSchema = new mongoose.Schema(
 
 activityLogSchema.index({ userId: 1, createdAt: -1 });
 activityLogSchema.index({ groupId: 1, createdAt: -1 });
-activityLogSchema.index({ reminderId: 1 });
+activityLogSchema.index({ taskId: 1 });
 
 const ActivityLog = mongoose.model("ActivityLog", activityLogSchema);
 export default ActivityLog;

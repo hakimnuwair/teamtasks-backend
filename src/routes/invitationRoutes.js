@@ -1,7 +1,7 @@
 import express from "express";
 import { protect } from "../middlewares/authMiddelware.js";
 import zodValidation from "../middlewares/zodValidation.js";
-import { inviteMemberSchema } from "../scehma/groupReminderSchema.js";
+import { inviteMemberSchema } from "../scehma/groupTaskSchema.js";
 
 import {
   sendInvitationController,

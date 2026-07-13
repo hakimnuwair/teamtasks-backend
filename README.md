@@ -1,6 +1,6 @@
 # TeamTasks — Backend API
 
-REST API and real-time server for the TeamTasks productivity platform. Built with Node.js, Express 5, MongoDB, and Socket.io. Handles authentication, task management, group operations, real-time notifications, and scheduled reminders.
+REST API and real-time server for the TeamTasks productivity platform. Built with Node.js, Express 5, MongoDB, and Socket.io. Handles authentication, task management, group operations, real-time notifications, and scheduled due-date alerts.
 
 **Frontend Repo →** [teamtasks-application](https://github.com/hakimnuwair/teamtasks-application)
 
@@ -8,9 +8,9 @@ REST API and real-time server for the TeamTasks productivity platform. Built wit
 
 ## Why TeamTasks?
 
-Most team collaboration tools are either too heavy (Jira, Asana) or too simple (shared to-do lists with no real access control). TeamTasks sits in the middle — a focused productivity backend purpose-built for small teams that need role-based task management, real-time updates, and deadline reminders without the enterprise overhead.
+Most team collaboration tools are either too heavy (Jira, Asana) or too simple (shared to-do lists with no real access control). TeamTasks sits in the middle — a focused productivity backend purpose-built for small teams that need role-based task management, real-time updates, and deadline alerts without the enterprise overhead.
 
-This API powers everything: authentication with Google OAuth, group and invitation management, Socket.io-driven live notifications, and cron-based reminders so no deadline ever goes unnoticed.
+This API powers everything: authentication with Google OAuth, group and invitation management, Socket.io-driven live notifications, and cron-based due-date alerts so no deadline ever goes unnoticed.
 
 ---
 
@@ -22,7 +22,7 @@ Most team productivity tools either lack real-time feedback or require heavyweig
 
 - **Auth complexity** — handles JWT access + refresh token rotation, Google OAuth via Passport.js, and role-based access (Admin / Manager / Member) so the frontend never manages permissions logic itself.
 - **Real-time delivery** — Socket.io is integrated at the server level, pushing notifications, deadline alerts, and activity events instantly without polling.
-- **Automated deadline tracking** — `node-cron` runs scheduled jobs to check upcoming deadlines and fire reminder notifications automatically, even when users aren't in the app.
+- **Automated deadline tracking** — `node-cron` runs scheduled jobs to check upcoming deadlines and fire due-date notifications automatically, even when users aren't in the app.
 - **Clean, safe API contract** — every endpoint is Zod-validated, rate-limited, and returns consistent responses, making frontend integration straightforward and predictable.
 
 This repo is the Node.js / Express backend — the frontend lives in [teamtasks-application](https://github.com/hakimnuwair/teamtasks-application).
@@ -53,7 +53,7 @@ This repo is the Node.js / Express backend — the frontend lives in [teamtasks-
 - **Role-Based Access Control** — Admin, Manager, and Member roles with protected routes
 - **Group Management** — create groups, manage members, invitation system
 - **Real-time Events** — Socket.io for instant notifications and deadline alerts
-- **Scheduled Reminders** — cron jobs for deadline and reminder notifications
+- **Scheduled Due-Date Alerts** — cron jobs for deadline and overdue-task notifications
 - **Email Notifications** — Nodemailer for invitation and alert emails
 - **Rate Limiting** — per-route request throttling
 - **Input Validation** — request body validation using Zod schemas
@@ -77,9 +77,9 @@ This repo is the Node.js / Express backend — the frontend lives in [teamtasks-
 | PATCH  | `/api/v1/invitations/:id`   | Auth   | Accept / reject invitation |
 | GET    | `/api/v1/notifications`     | Auth   | Get notifications          |
 | PATCH  | `/api/v1/notifications/:id` | Auth   | Mark notification as read  |
-| GET    | `/api/v1/reminders`         | Auth   | Get user reminders         |
-| POST   | `/api/v1/reminders`         | Auth   | Create a reminder          |
-| DELETE | `/api/v1/reminders/:id`     | Auth   | Delete a reminder          |
+| GET    | `/api/v1/tasks`             | Auth   | Get user tasks             |
+| POST   | `/api/v1/tasks`             | Auth   | Create a task               |
+| DELETE | `/api/v1/tasks/:id`         | Auth   | Delete a task                |
 | GET    | `/api/v1/activity`          | Auth   | Get activity log           |
 
 ---

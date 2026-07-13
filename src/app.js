@@ -15,7 +15,7 @@ import rateLimit from "express-rate-limit";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { initSocket } from "./server/socketManager.js";
-import { startReminderScheduler } from "./services/reminderScheduler.js";
+import { startTaskScheduler } from "./services/taskScheduler.js";
 
 import { connectDB } from "./config/db.js";
 import passport, { initPassport } from "./config/passport.js";
@@ -24,7 +24,7 @@ import { errorHandler } from "./middlewares/errorHandler.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
-import reminderRoutes from "./routes/reminderRoutes.js";
+import taskRoutes from "./routes/taskRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import invitationRoutes from "./routes/invitationRoutes.js";
@@ -102,7 +102,7 @@ app.use(`${versionPrefix}/auth`, authRoutes);
 app.use(`${versionPrefix}/users`, userRoutes);
 app.use(`${versionPrefix}/groups`, groupRoutes);
 app.use(`${versionPrefix}/invitations`, invitationRoutes);
-app.use(`${versionPrefix}/reminders`, reminderRoutes);
+app.use(`${versionPrefix}/tasks`, taskRoutes);
 app.use(`${versionPrefix}/notifications`, notificationRoutes);
 app.use(`${versionPrefix}/activity`, activityRoutes);
 app.use(`${versionPrefix}/ai`, aiRoutes);
@@ -116,7 +116,7 @@ app.use(errorHandler);
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 connectDB().then(() => {
-  startReminderScheduler(io);
+  startTaskScheduler(io);
   httpServer.listen(process.env.PORT || 5000, () => {
     console.log(`[Server] Running on PORT ${process.env.PORT || 5000} ✅`);
     console.log(`[Server] Socket.io ready`);
