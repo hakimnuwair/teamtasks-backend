@@ -382,13 +382,6 @@ export const completeSubTask = async (
     if (!parent) throw new Error("Parent task not found");
     if (parent.isDeleted) throw new Error("Parent task has been deleted");
 
-    const isCreator =
-      parent.createdBy.toString() === requestingUserId.toString();
-    const isAssigned = parent.assignedUsers.some(
-      (uid) => uid.toString() === requestingUserId.toString(),
-    );
-    if (!isCreator && !isAssigned) throw new Error("Access denied");
-
     // Load sub-task
     const sub = await Task.findOne({
       _id: subTaskId,
@@ -399,6 +392,15 @@ export const completeSubTask = async (
     if (sub.isDeleted) throw new Error("Sub-task has been deleted");
     if (sub.status === "COMPLETED")
       throw new Error("Sub-task is already completed");
+
+    // Only assigned users can complete a sub-task (mirrors
+    // taskService.completeTask's rule) — the creator only qualifies here
+    // when they're also an assignee, same as top-level tasks.
+    const isAssigned = sub.assignedUsers.some(
+      (uid) => uid.toString() === requestingUserId.toString(),
+    );
+    if (!isAssigned)
+      throw new Error("Only assigned users can complete this sub-task");
 
     // Check per-user completion (mirrors taskService.completeTask logic)
     const alreadyDone = sub.userCompletions.some(

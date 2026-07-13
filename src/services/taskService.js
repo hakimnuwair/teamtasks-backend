@@ -284,13 +284,15 @@ export const completeTask = async ({ taskId, requestingUserId, ipAddress }) => {
     const task = await Task.findById(taskId).session(session);
     if (!task) throw new Error("Task not found");
 
+    // Only assigned users can complete a task. For personal tasks and
+    // group tasks assigned to all members, the creator is always included
+    // in assignedUsers, so this doesn't block those cases — it only blocks
+    // a creator who assigned the task to specific other members.
     const isAssigned = task.assignedUsers.some(
       (uid) => uid.toString() === requestingUserId.toString(),
     );
-    const isCreator =
-      task.createdBy.toString() === requestingUserId.toString();
-    if (!isAssigned && !isCreator)
-      throw new Error("You are not authorized to complete this task");
+    if (!isAssigned)
+      throw new Error("Only assigned users can complete this task");
 
     const alreadyDone = task.userCompletions.some(
       (uc) => uc.userId.toString() === requestingUserId.toString(),
