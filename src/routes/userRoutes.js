@@ -10,6 +10,8 @@
 import express from "express";
 import * as userController from "../controllers/userController.js";
 import { protect } from "../middlewares/authMiddelware.js";
+import zodValidation from "../middlewares/zodValidation.js";
+import { updateUserSchema } from "../scehma/userSchema.js";
 
 const router = express.Router();
 
@@ -21,6 +23,6 @@ router.get("/", userController.getAllUsers);
 
 // Dynamic :id routes last
 router.get("/:id", userController.getUserById);
-router.patch("/:id", userController.updateUser);
+router.patch("/:id", zodValidation(updateUserSchema), userController.updateUser);
 
 export default router;

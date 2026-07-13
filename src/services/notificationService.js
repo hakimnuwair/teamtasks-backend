@@ -8,6 +8,7 @@ export const getUserNotifications = async ({
   limit = 20,
   unreadOnly = false,
 }) => {
+  limit = Math.min(limit, 100); // cap to prevent unbounded pagination requests
   const baseFilter = {
     userId,
     isDeleted: false,

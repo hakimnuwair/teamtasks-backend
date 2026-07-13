@@ -26,6 +26,13 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    // Free-form per-type payload (e.g. invitationId for GROUP_INVITE) — mirrors
+    // ActivityLog's metadata field. Without this, Mongoose silently strips any
+    // metadata passed on create, breaking anything that reads it back.
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
     isRead: {
       type: Boolean,
       default: false,

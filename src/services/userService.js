@@ -9,8 +9,11 @@ import User from "../models/User.js";
 
 // GET /users
 export const getAllUsers = async () => {
+  // No pagination params accepted today — cap the result set so this can't
+  // grow unbounded as the user base grows.
   return User.find({ status: "ACTIVE" })
     .select("-password -refreshToken")
+    .limit(100)
     .lean();
 };
 

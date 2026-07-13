@@ -66,6 +66,7 @@ export const createLog = async (
  * Fetch activity logs for a user (paginated).
  */
 export const getUserLogs = async ({ userId, page = 1, limit = 20 }) => {
+  limit = Math.min(limit, 100); // cap to prevent unbounded pagination requests
   const skip = (page - 1) * limit;
 
   const [logs, total] = await Promise.all([
@@ -95,6 +96,7 @@ export const getUserLogs = async ({ userId, page = 1, limit = 20 }) => {
  * Fetch activity logs for a group (paginated).
  */
 export const getGroupLogs = async ({ groupId, page = 1, limit = 20 }) => {
+  limit = Math.min(limit, 100); // cap to prevent unbounded pagination requests
   const skip = (page - 1) * limit;
 
   const [logs, total] = await Promise.all([

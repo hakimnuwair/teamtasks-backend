@@ -22,10 +22,14 @@
  *      creator-only. Assigned (non-creator) users execute the plan: they may
  *      view it (getSubReminders) and complete items (completeSubReminder), but
  *      not create or delete them.
+ *   9. Any active member of the parent's group may also view the plan
+ *      (getSubReminders) for transparency, even if not creator/assigned —
+ *      they still cannot create/complete/delete items.
  */
 
 import mongoose from "mongoose";
 import Reminder from "../models/Reminder.js";
+import Group from "../models/Group.js";
 import { createLog } from "./activityLogService.js";
 
 // ── Populate shape reused across all queries ──────────────────────────────────
@@ -114,7 +118,7 @@ export const createSubReminder = async (
 // ─── Get sub-reminders for a parent ──────────────────────────────────────────
 
 export const getSubReminders = async ({ parentId, requestingUserId }) => {
-  // Validate access — the requester must be creator or assigned on the parent
+  // Validate access — creator, assigned, or any active member of the parent's group
   const parent = await Reminder.findById(parentId).lean();
 
   if (!parent) throw new Error("Parent reminder not found");
@@ -124,7 +128,19 @@ export const getSubReminders = async ({ parentId, requestingUserId }) => {
   const isAssigned = parent.assignedUsers.some(
     (uid) => uid.toString() === requestingUserId.toString(),
   );
-  if (!isCreator && !isAssigned) throw new Error("Access denied");
+
+  let isGroupMember = false;
+  if (!isCreator && !isAssigned && parent.groupId) {
+    const group = await Group.findOne({
+      _id: parent.groupId,
+      isActive: true,
+      "members.userId": requestingUserId,
+    });
+    isGroupMember = !!group;
+  }
+
+  if (!isCreator && !isAssigned && !isGroupMember)
+    throw new Error("Access denied");
 
   const subReminders = await populateSubReminder(
     Reminder.find({ parentId }).sort({ dueDateTime: 1 }),
@@ -184,7 +200,15 @@ export const deleteSubReminder = async (
     );
 
     await session.commitTransaction();
-    return { message: "Sub-reminder deleted successfully" };
+    // createdBy/assignedUsers returned (not part of the HTTP response body —
+    // the controller only forwards `message`) so the caller can target the
+    // subReminderDeleted socket event at the relevant users instead of
+    // broadcasting it to everyone.
+    return {
+      message: "Sub-reminder deleted successfully",
+      createdBy: sub.createdBy,
+      assignedUsers: sub.assignedUsers,
+    };
   } catch (err) {
     await session.abortTransaction();
     throw err;

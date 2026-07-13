@@ -140,6 +140,7 @@ export const getMyReminders = async ({
   page = 1,
   limit = 20,
 }) => {
+  limit = Math.min(limit, 100); // cap to prevent unbounded pagination requests
   // Only return TOP-LEVEL reminders — sub-reminders are fetched separately
   const filter = { assignedUsers: userId, parentId: null };
   if (status) filter.status = status;
@@ -171,6 +172,7 @@ export const getGroupReminders = async ({
   page = 1,
   limit = 20,
 }) => {
+  limit = Math.min(limit, 100); // cap to prevent unbounded pagination requests
   const group = await Group.findOne({
     _id: groupId,
     isActive: true,
@@ -198,7 +200,7 @@ export const getGroupReminders = async ({
   };
 };
 
-// ─── Unchanged: getReminderById ───────────────────────────────────────────────
+// ─── getReminderById ──────────────────────────────────────────────────────────
 
 export const getReminderById = async ({ reminderId, requestingUserId }) => {
   const reminder = await Reminder.findById(reminderId)
@@ -212,7 +214,21 @@ export const getReminderById = async ({ reminderId, requestingUserId }) => {
   );
   const isCreator =
     reminder.createdBy._id.toString() === requestingUserId.toString();
-  if (!isAssigned && !isCreator) throw new Error("Access denied");
+
+  // Any active member of the reminder's group gets read access, even if
+  // they're not the creator/assignee — improves transparency within a group.
+  let isGroupMember = false;
+  if (!isAssigned && !isCreator && reminder.groupId) {
+    const group = await Group.findOne({
+      _id: reminder.groupId._id ?? reminder.groupId,
+      isActive: true,
+      "members.userId": requestingUserId,
+    });
+    isGroupMember = !!group;
+  }
+
+  if (!isAssigned && !isCreator && !isGroupMember)
+    throw new Error("Access denied");
   return reminder;
 };
 
@@ -233,6 +249,12 @@ export const updateReminder = async ({
       throw new Error("Only the creator can update this reminder");
     if (reminder.status === "COMPLETED")
       throw new Error("Cannot update a completed reminder");
+    // Completion must always go through completeReminder() so the
+    // sub-reminder-blocking check and per-user completion tracking are enforced.
+    if (updates.status === "COMPLETED")
+      throw new Error(
+        "Invalid update: use POST /reminders/:id/complete to mark a reminder complete",
+      );
     if (updates.assignedUsers && reminder.groupId) {
       updates.assignedUsers = await resolveAssignedUsers(
         reminder.groupId,

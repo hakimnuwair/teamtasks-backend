@@ -9,7 +9,12 @@ import express from "express";
 import passport from "../config/passport.js";
 import * as authController from "../controllers/authController.js";
 import zodValidation from "../middlewares/zodValidation.js";
-import { loginSchema, registerSchema } from "../scehma/authSchema.js";
+import {
+  loginSchema,
+  registerSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+} from "../scehma/authSchema.js";
 import { protect } from "../middlewares/authMiddelware.js";
 import {
   generateAccessToken,
@@ -30,8 +35,16 @@ router.get("/me", protect, authController.getMyAuthDetails);
 router.post("/logout", protect, authController.logoutUser);
 
 // Password reset
-router.post("/forgot-password", authController.forgotPassword);
-router.post("/reset-password", authController.resetPassword);
+router.post(
+  "/forgot-password",
+  zodValidation(forgotPasswordSchema),
+  authController.forgotPassword,
+);
+router.post(
+  "/reset-password",
+  zodValidation(resetPasswordSchema),
+  authController.resetPassword,
+);
 
 // Google OAuth — step 1: redirect to Google consent screen
 router.get(

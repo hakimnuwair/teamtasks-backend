@@ -79,6 +79,8 @@ export const handleRefreshToken = async (refreshToken) => {
   const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
   const user = await User.findById(decoded.id).select("+refreshToken");
   if (!user) throw new Error("User not found");
+  if (user.status !== "ACTIVE")
+    throw new Error("Unauthorized: account is not active");
   if (user.refreshToken !== refreshToken)
     throw new Error("Invalid refresh token");
 

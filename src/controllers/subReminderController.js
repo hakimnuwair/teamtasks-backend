@@ -110,12 +110,17 @@ export const deleteSubReminder = async (req, res, next) => {
     );
 
     const io = req.app.get("io");
-    if (io) {
-      // Notify the parent reminder's room that a sub-reminder was removed
-      io.emit("subReminderDeleted", {
-        parentId: String(req.params.id),
-        subReminderId: String(req.params.subId),
-      });
+    if (io && result.assignedUsers) {
+      // Notify only the creator + assigned users, same as the other sub-reminder events
+      const uids = new Set();
+      if (result.createdBy) uids.add(String(result.createdBy));
+      for (const uid of result.assignedUsers) uids.add(String(uid));
+      for (const uid of uids) {
+        io.to(uid).emit("subReminderDeleted", {
+          parentId: String(req.params.id),
+          subReminderId: String(req.params.subId),
+        });
+      }
     }
 
     return sendSuccess(res, null, result.message);

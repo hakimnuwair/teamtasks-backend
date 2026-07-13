@@ -1,5 +1,7 @@
 import express from "express";
 import { protect } from "../middlewares/authMiddelware.js";
+import zodValidation from "../middlewares/zodValidation.js";
+import { inviteMemberSchema } from "../scehma/groupReminderSchema.js";
 
 import {
   sendInvitationController,
@@ -14,7 +16,11 @@ const router = express.Router();
 router.use(protect);
 
 // POST /api/groups/:groupId/invite
-router.post("/groups/:groupId/invite", sendInvitationController);
+router.post(
+  "/groups/:groupId/invite",
+  zodValidation(inviteMemberSchema),
+  sendInvitationController,
+);
 
 // GET /api/invitations/me
 router.get("/me", getMyInvitationsController);
