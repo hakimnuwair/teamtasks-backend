@@ -48,3 +48,95 @@ export const improveTask = async ({ task }) => {
     throw new Error("AI service is temporarily unavailable");
   }
 };
+
+// ─── Generate subtask suggestions ─────────────────────────────────────────────
+// Structured (JSON-schema-constrained) output — asks for a relative
+// "dueOffsetDays" per item rather than an absolute date, since models are
+// unreliable at absolute date arithmetic. The caller (subReminderService)
+// turns the offset into a real date and re-validates every field — this
+// function only talks to Gemini and returns the parsed-but-unvalidated array.
+
+const SUBTASK_RESPONSE_SCHEMA = {
+  type: "ARRAY",
+  minItems: 1,
+  maxItems: 8,
+  items: {
+    type: "OBJECT",
+    properties: {
+      title: { type: "STRING" },
+      description: { type: "STRING" },
+      dueOffsetDays: { type: "INTEGER" },
+      priority: { type: "STRING", enum: ["LOW", "MEDIUM", "HIGH"] },
+    },
+    required: ["title", "dueOffsetDays"],
+  },
+};
+
+const SUBTASK_PROMPT = ({ title, description, priority, daysRemaining }) =>
+  `You are a productivity assistant for a team task management app.
+
+Break the following task down into a short, actionable execution plan (subtasks).
+Each subtask needs: a clear "title", an optional one-sentence "description", a
+"priority" (LOW, MEDIUM, or HIGH), and "dueOffsetDays" — the number of whole days
+from today the subtask should be done by (0 = today). The subtasks together must
+fit within ${daysRemaining} day(s), since that's how long is left until the task
+itself is due. Order subtasks logically. Return between 1 and 8 subtasks.
+
+Task title: ${title}
+Task description: ${description || "(no description provided)"}
+Task priority: ${priority}
+Days remaining until the task is due: ${daysRemaining}`;
+
+export const generateSubtasks = async ({ reminder }) => {
+  const daysRemaining = Math.max(
+    1,
+    Math.ceil(
+      (new Date(reminder.dueDateTime).getTime() - Date.now()) /
+        (24 * 60 * 60 * 1000),
+    ),
+  );
+
+  try {
+    const ai = getGeminiClient();
+    const response = await ai.models.generateContent({
+      model: getGeminiModel(),
+      contents: SUBTASK_PROMPT({
+        title: reminder.title,
+        description: reminder.description,
+        priority: reminder.priority,
+        daysRemaining,
+      }),
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: SUBTASK_RESPONSE_SCHEMA,
+      },
+    });
+
+    const raw = response.text?.trim();
+    if (!raw) throw new Error("Failed to generate subtasks");
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error("Failed to generate subtasks");
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      throw new Error("Failed to generate subtasks");
+    }
+
+    return parsed;
+  } catch (error) {
+    if (error.message === "AI service configuration error") {
+      console.error("[Gemini] GEMINI_API_KEY is missing or empty");
+      throw error;
+    }
+
+    if (error.message === "Failed to generate subtasks") {
+      throw error;
+    }
+
+    console.error("[Gemini] generateSubtasks failed:", error);
+    throw new Error("AI service is temporarily unavailable");
+  }
+};

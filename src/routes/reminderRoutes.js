@@ -13,11 +13,15 @@ import * as reminderController from "../controllers/reminderController.js";
 import * as subReminderController from "../controllers/subReminderController.js";
 import zodValidation from "../middlewares/zodValidation.js";
 import { protect } from "../middlewares/authMiddelware.js";
+import { aiRateLimiter } from "../middlewares/aiRateLimiter.js";
 import {
   createReminderSchema,
   updateReminderSchema,
 } from "../scehma/groupReminderSchema.js";
-import { createSubReminderSchema } from "../scehma/subReminderSchema.js";
+import {
+  createSubReminderSchema,
+  batchCreateSubRemindersSchema,
+} from "../scehma/subReminderSchema.js";
 
 const router = express.Router();
 
@@ -64,6 +68,23 @@ router.post(
 router.delete(
   "/:id/sub-reminders/:subId",
   subReminderController.deleteSubReminder,
+);
+
+// ─── AI subtask generation (NEW) ───────────────────────────────────────────────
+// generate is pure (Gemini call only, no DB write) — rate-limited since it
+// calls a paid external API. batch is the confirm step that actually persists
+// a reviewed set of suggestions, validated the same way as a manual create.
+
+router.post(
+  "/:id/sub-reminders/generate",
+  aiRateLimiter,
+  subReminderController.generateSubtasks,
+);
+
+router.post(
+  "/:id/sub-reminders/batch",
+  zodValidation(batchCreateSubRemindersSchema),
+  subReminderController.createSubRemindersBatch,
 );
 
 // ─── Re-export for groupRoutes (unchanged) ────────────────────────────────────

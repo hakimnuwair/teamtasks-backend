@@ -96,6 +96,61 @@ export const completeSubReminder = async (req, res, next) => {
   }
 };
 
+// ─── POST /reminders/:id/sub-reminders/generate ──────────────────────────────
+// Pure — calls Gemini and returns suggestions. Writes nothing to the DB.
+
+export const generateSubtasks = async (req, res, next) => {
+  try {
+    const suggestions = await subReminderService.generateSubtaskSuggestions({
+      parentId: req.params.id,
+      requestingUserId: req.user._id,
+    });
+
+    return sendSuccess(res, { suggestions }, "Subtasks generated");
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── POST /reminders/:id/sub-reminders/batch ─────────────────────────────────
+// The only step that persists anything from the AI-review flow — a reviewed
+// (possibly edited) set of suggestions, created in one transaction.
+
+export const createSubRemindersBatch = async (req, res, next) => {
+  try {
+    const subReminders = await subReminderService.createSubRemindersBatch(
+      {
+        parentId: req.params.id,
+        subReminders: req.body.subReminders,
+        creatorId: req.user._id,
+      },
+      getIp(req),
+    );
+
+    const io = req.app.get("io");
+    if (io && subReminders.length > 0) {
+      const first = subReminders[0];
+      const uids = new Set();
+      if (first.createdBy) {
+        uids.add(String(first.createdBy._id ?? first.createdBy));
+      }
+      for (const uid of first.assignedUsers ?? []) {
+        uids.add(String(uid._id ?? uid));
+      }
+      for (const uid of uids) {
+        io.to(uid).emit("subRemindersBatchCreated", {
+          parentId: String(req.params.id),
+          subReminders,
+        });
+      }
+    }
+
+    return sendCreated(res, { subReminders }, "Sub-reminders created");
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ─── DELETE /reminders/:id/sub-reminders/:subId ──────────────────────────────
 
 export const deleteSubReminder = async (req, res, next) => {
